@@ -11,3 +11,8 @@ CMakeCache.txt
 Makefile
 test
 test_ids
+.timetracker
+/result/
+**/target/
+/lib/
+/libs/
