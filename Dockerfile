@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Clone your repo (or mount it during build)
-RUN git clone --recurse-submodules https://github.com/yourusername/mcaat.git .
+RUN git clone --recurse-submodules https://github.com/RNABioInfo/mcaat.git .
 
 # If needed:
 # RUN git submodule update --init --recursive
