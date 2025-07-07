@@ -6,15 +6,57 @@
 - MCAAT's assembly-free graph-based strategy outperforms assembly-based workflows and other assembly-free methods on synthetic and real metagenomes. 
 ---
 
-## 🚀 Usage
+## Installation
+### Build the Docker Image
 
 ```bash
-./crispr_analyzer --input-files <file1> [file2] [--ram <amount>] [--threads <num>] [--output-folder <path>] [--help]
+docker build -t mcaat .
 ```
 
 ---
 
-## 🔹 Required Arguments
+### Run the Tool
+
+Mount your working directory to access input/output files:
+
+```bash
+docker run --rm -v $(pwd):/data mcaat \
+  --input_files /data/reads_R1.fastq /data/reads_R2.fastq \
+  --output-folder /data/results
+```
+
+---
+
+### Final Image Size
+
+The final image is based on `debian:bookworm-slim` and includes only:
+
+- The `mcaat` binary
+- Runtime libraries: `libomp5`, `zlib1g`
+
+This keeps the image small and portable.
+
+---
+
+### Clean Up
+
+To remove the image:
+
+```bash
+docker rmi mcaat
+```
+
+
+
+## Usage
+
+```bash
+./mcaat --input-files <file1> [file2] [--ram <amount>] [--threads <num>] [--output-folder <path>] [--help]
+```
+
+---
+
+### Required Arguments
 
 - `--input-files <file1> [file2]`  
   One or two input FASTA/FASTQ files.  
@@ -23,7 +65,7 @@
 
 ---
 
-## 🔸 Optional Arguments
+### Optional Arguments
 
 - `--ram <amount>`  
   Maximum RAM to use. Supports units:  
@@ -45,7 +87,7 @@
 
 ---
 
-## 📁 Output Structure
+### Output Structure
 
 The tool creates the following directory structure inside the specified output folder:
 
@@ -56,7 +98,7 @@ The tool creates the following directory structure inside the specified output f
 
 ---
 
-## 🧪 Example
+### Example
 
 ```bash
 ./crispr_analyzer \
@@ -78,7 +120,7 @@ Then a folder like `mcaat_run_2025-07-07_15-30-00/` will be created automaticall
 
 ---
 
-## ⚠️ Notes
+## Notes
 
 - Input files must exist and be accessible.
 - If RAM is set below 1 GB or above system capacity, the program will exit with an error.
@@ -86,7 +128,7 @@ Then a folder like `mcaat_run_2025-07-07_15-30-00/` will be created automaticall
 
 ---
 
-## 🛠️ Requirements
+## Requirements
 
 - C++17 compiler
 - [RapidFuzz](https://github.com/maxbachmann/rapidfuzz-cpp) (for fuzzy string matching)
@@ -94,6 +136,6 @@ Then a folder like `mcaat_run_2025-07-07_15-30-00/` will be created automaticall
 
 ---
 
-## 📞 Support
+## Support
 
 If you encounter issues or have questions, feel free to open an issue.

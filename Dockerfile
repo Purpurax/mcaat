@@ -1,25 +1,40 @@
-# Use an official Ubuntu as a parent image
-FROM ubuntu:latest
-# Clean up unnecessary packages
-# Install required packages
-RUN apt-get update && apt-get -y upgrade
-RUN apt-get install -y curl build-essential cmake make git pkg-config python3
-RUN apt-get install -y libomp-dev zlib1g-dev libpthread-stubs0-dev 
+# Stage 1: Build
+FROM ubuntu:22.04 AS builder
 
-# Set the working directory in the container
-WORKDIR /mcaat
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Copy the project directory contents into the container at /mcaat
-COPY . /mcaat
-#CMD which
-# Create build directory
-RUN mkdir -p build
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    zlib1g-dev \
+    libomp-dev \
+    libpthread-stubs0-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Run CMake to configure the build
-RUN cd build && cmake -DCMAKE_BUILD_TYPE=Release ..
+WORKDIR /app
 
-# Build the project
-RUN cd build && make VERBOSE=1
+# Clone your repo (or mount it during build)
+RUN git clone --recurse-submodules https://github.com/yourusername/mcaat.git .
 
-# Set the entry point for the container
-ENTRYPOINT ["./build/mcaat"]
+# If needed:
+# RUN git submodule update --init --recursive
+
+RUN mkdir build && cd build && \
+    cmake .. && \
+    make -j$(nproc)
+
+# Stage 2: Runtime
+FROM debian:bookworm-slim
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libomp5 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary from builder
+COPY --from=builder /app/build/mcaat /usr/local/bin/mcaat
+
+# Set default command
+ENTRYPOINT ["mcaat"]
