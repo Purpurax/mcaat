@@ -47,72 +47,21 @@ docker rmi mcaat
 ```
 
 ## Compiling the project
-### 📦 System Requirements
 
-- Linux (Ubuntu/Debian recommended)
-- C++17-compatible compiler (e.g. `g++` ≥ 7 or `clang++`)
-- CMake ≥ 3.12
-- Git
-
----
-
-### 📚 Required Dependencies
-
-Install the following packages using `apt`:
-
+### 🔧 Build the Project
+To allow ./install.sh make changes, we execute following command:
 ```bash
-sudo apt update
-sudo apt install -y \
-  build-essential \
-  cmake \
-  git \
-  zlib1g-dev \
-  libomp-dev \
-  libpthread-stubs0-dev
+chmod +x ./install.sh
 ```
-
----
-
-### 📥 Clone the Repository
-
+You can build the project and the working version will be saved in the build folder.
 ```bash
-git clone --recurse-submodules https://github.com/yourusername/mcaat.git
-cd mcaat
+./install.sh
 ```
-
-> If you forgot `--recurse-submodules`, run:
->
-> ```bash
-> git submodule update --init --recursive
-> ```
-
----
-
-### ⚙️ Build the Project
-
+It is also possible to install the library by simply putting the --install flag.
 ```bash
-mkdir build
-cd build
-cmake ..
-make -j$(nproc)
+./install.sh --install
 ```
-
-This will generate the `mcaat` binary in the `build/` directory.
-
----
-
-### 🚀 Run the Tool
-
-```bash
-./mcaat --input_files <file1> [file2] [--ram <amount>] [--threads <num>] [--output-folder <path>]
-```
-
-Use `--help` to see all available options:
-
-```bash
-./mcaat --help
-```
-
+To clean up you can use --clean flag.
 ---
 
 
