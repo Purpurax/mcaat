@@ -6,8 +6,8 @@
 - MCAAT's assembly-free graph-based strategy outperforms assembly-based workflows and other assembly-free methods on synthetic and real metagenomes. 
 ---
 
-## Installation
-### Build the Docker Image
+## Installation using docker
+### Docker Build
 
 ```bash
 docker build -t mcaat .
@@ -15,7 +15,7 @@ docker build -t mcaat .
 
 ---
 
-### Run the Tool
+### Run the Tool Using Docker
 
 Mount your working directory to access input/output files:
 
@@ -46,6 +46,74 @@ To remove the image:
 docker rmi mcaat
 ```
 
+## Compiling the project
+### 📦 System Requirements
+
+- Linux (Ubuntu/Debian recommended)
+- C++17-compatible compiler (e.g. `g++` ≥ 7 or `clang++`)
+- CMake ≥ 3.12
+- Git
+
+---
+
+### 📚 Required Dependencies
+
+Install the following packages using `apt`:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  cmake \
+  git \
+  zlib1g-dev \
+  libomp-dev \
+  libpthread-stubs0-dev
+```
+
+---
+
+### 📥 Clone the Repository
+
+```bash
+git clone --recurse-submodules https://github.com/yourusername/mcaat.git
+cd mcaat
+```
+
+> If you forgot `--recurse-submodules`, run:
+>
+> ```bash
+> git submodule update --init --recursive
+> ```
+
+---
+
+### ⚙️ Build the Project
+
+```bash
+mkdir build
+cd build
+cmake ..
+make -j$(nproc)
+```
+
+This will generate the `mcaat` binary in the `build/` directory.
+
+---
+
+### 🚀 Run the Tool
+
+```bash
+./mcaat --input_files <file1> [file2] [--ram <amount>] [--threads <num>] [--output-folder <path>]
+```
+
+Use `--help` to see all available options:
+
+```bash
+./mcaat --help
+```
+
+---
 
 
 ## Usage
@@ -101,7 +169,7 @@ The tool creates the following directory structure inside the specified output f
 ### Example
 
 ```bash
-./crispr_analyzer \
+./mcaat \
   --input_files reads_R1.fastq reads_R2.fastq \
   --ram 8G \
   --threads 12 \
@@ -113,7 +181,7 @@ This will create a folder like `results/my_run/` with all outputs inside.
 If `--output-folder` is omitted:
 
 ```bash
-./crispr_analyzer --input_files reads.fastq
+./mcaat --input_files reads.fastq
 ```
 
 Then a folder like `mcaat_run_2025-07-07_15-30-00/` will be created automatically.
