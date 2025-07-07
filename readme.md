@@ -1,72 +1,96 @@
-# MCAAT - metagenomic CRISPR array analysis tool
+# 🧬 MCAAT - Metagenomic CRISPR Array Analysis Tool
 
-## Compilation
-To compile the software, ensure you have CMake (minimum version 3.12) installed. Then, follow these steps:
+CRISPR-Cas is a bacterial immune system also famous for its use in genome editing. The diversity of known systems could be significantly increased by metagenomic data. Here we present the Metagenomic CRISPR Array Analysis Tool MCAAT, a highly sensitive algorithm for finding CRISPR Arrays in un-assembled metagenomic data. It takes advantage of the properties of CRISPR arrays that form multicycles in de Bruijn graphs. MCAAT's assembly-free graph-based strategy outperforms assembly-based workflows and other assembly-free methods on synthetic and real metagenomes. 
+---
 
-```bash
-mkdir -p build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-```
-
-After compilation, you can run the tool using:
+## 🚀 Usage
 
 ```bash
-./mcaat --input_files <file1.fastq> [file2.fastq] [options]
+./crispr_analyzer --input-files <file1> [file2] [--ram <amount>] [--threads <num>] [--output-folder <path>] [--help]
 ```
 
-Alternatively, you can build and run the tool using Docker.
+---
 
-### Using Docker
-#### Build the Docker Image
-```bash
-docker build -t mcaat_image .
-```
+## 🔹 Required Arguments
 
-#### Run the Docker Container
-```bash
-docker run --rm -v $(pwd):/mcaat mcaat_image --input_files <file1.fastq> [file2.fastq] [options]
-```
+- `--input-files <file1> [file2]`  
+  One or two input FASTA/FASTQ files.  
+  - If one file is provided, it is treated as single-end data.  
+  - If two files are provided, they are treated as paired-end reads.
 
-## Required Arguments
-- `--input_files <file1.fastq> [file2.fastq]`  
-  - You must provide **one or two** `.fastq` input files.  
-  - If an input file does not exist, the program will terminate with an error.
+---
 
-## Optional Arguments
-- `--ram <value>`  
-  - Sets the amount of RAM (in Bytes) to be used.  
-  - **Default:** 90% of total system memory.
->**IMPORTANT**
-> For the current version of MCAAT, it is recommended to keep the RAM at its default value. It is easy to make mistakes with zeros when dealing with bytes.
+## 🔸 Optional Arguments
+
+- `--ram <amount>`  
+  Maximum RAM to use. Supports units:  
+  - `B` (bytes), `K` (kilobytes), `M` (megabytes), `G` (gigabytes)  
+  - **Default:** 95% of system RAM  
+  - **Example:** `--ram 4G`
 
 - `--threads <num>`  
-  - Number of threads to use.  
-  - **Default:** Total available CPU cores minus 2. If the device has only 2 both will be used.
-
-- `--k <k-mer>`  
-  - Specifies the k-mer size.
+  Number of threads to use.  
+  - **Default:** total CPU cores minus 2
 
 - `--output-folder <path>`  
-  - Specifies the directory for storing output files.
-> **IMPORTANT**
-> MCAAT saves the graph under output_folder/graph. If a user stops the software early(by pressing CMD+C), the folder will not be deleted.   
+  Output directory for results.  
+  - If not provided, a timestamped folder will be created automatically.  
+  - If provided, the folder is used exactly as given (no timestamp added).
 
-## Example Usage
-```bash
-./mcaat --input_files sample1.fastq sample2.fastq --ram 4000 --threads 8 --output-folder results/
+- `--help`, `-h`  
+  Show usage information and exit.
+
+---
+
+## 📁 Output Structure
+
+The tool creates the following directory structure inside the specified output folder:
+
+```
+<output-folder>/
+├── CRISPR_Arrays.txt         # Raw CRISPR array output
 ```
 
-Or using Docker:
+---
+
+## 🧪 Example
+
 ```bash
-docker run --rm -v $(pwd):/mcaat mcaat_image --input_files sample1.fastq sample2.fastq --ram 4000 --threads 8 --output-folder results/
+./crispr_analyzer \
+  --input_files reads_R1.fastq reads_R2.fastq \
+  --ram 8G \
+  --threads 12 \
+  --output-folder results/my_run
 ```
 
-This command:
-- Uses `sample1.fastq` and `sample2.fastq` as input files.
-- Allocates 4000 MiB of RAM.
-- Runs with 8 threads.
-- Saves outputs to the `results/` directory.
+This will create a folder like `results/my_run/` with all outputs inside.
 
-If an option is not provided, **mcaat** applies default values where applicable.
+If `--output-folder` is omitted:
 
+```bash
+./crispr_analyzer --input_files reads.fastq
+```
+
+Then a folder like `mcaat_run_2025-07-07_15-30-00/` will be created automatically.
+
+---
+
+## ⚠️ Notes
+
+- Input files must exist and be accessible.
+- If RAM is set below 1 GB or above system capacity, the program will exit with an error.
+- If only one input file is provided, the tool assumes single-end data.
+
+---
+
+## 🛠️ Requirements
+
+- C++17 compiler
+- [RapidFuzz](https://github.com/maxbachmann/rapidfuzz-cpp) (for fuzzy string matching)
+- Filesystem support (`<filesystem>`)
+
+---
+
+## 📞 Support
+
+If you encounter issues or have questions, feel free to open an issue.

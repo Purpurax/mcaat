@@ -45,9 +45,9 @@ void PathWriter::CollectPathsIntoStringStreams(vector<uint64_t> path) {
     ofstream path_report_file;
     ofstream multiplicity_report_file;
 
-    string cycle_file_name = this->folder_path + this->genome_id + "/cycles/str_paths.txt";
-    string id_file_name = this->folder_path + this->genome_id + "/cycles/id_paths.txt";
-    string multiplicity_file_name = this->folder_path + this->genome_id + "/cycles/multiplicity_distribution.txt";
+    string cycle_file_name = this->genome_id + "/str_paths.txt";
+    string id_file_name = this->genome_id + "/id_paths.txt";
+    string multiplicity_file_name = this->genome_id + "/multiplicity_distribution.txt";
     
     multiplicity_report_file.open(multiplicity_file_name, std::ios_base::app);
     cycle_report_file.open(cycle_file_name, std::ios_base::app);
