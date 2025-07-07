@@ -61,7 +61,6 @@ It is also possible to install the library by simply putting the --install flag.
 ```bash
 ./install.sh --install
 ```
-To clean up you can use --clean flag.
 ---
 
 
