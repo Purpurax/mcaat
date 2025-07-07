@@ -1,5 +1,4 @@
-# 🧬 MCAAT - Metagenomic CRISPR Array Analysis Tool
-
+## 🧬 MCAAT - Metagenomic CRISPR Array Analysis Tool
 CRISPR-Cas is a bacterial immune system also famous for its use in genome editing. The diversity of known systems could be significantly increased by metagenomic data. Here we present the Metagenomic CRISPR Array Analysis Tool MCAAT, a highly sensitive algorithm for finding CRISPR Arrays in un-assembled metagenomic data. It takes advantage of the properties of CRISPR arrays that form multicycles in de Bruijn graphs. MCAAT's assembly-free graph-based strategy outperforms assembly-based workflows and other assembly-free methods on synthetic and real metagenomes. 
 ---
 
