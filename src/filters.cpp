@@ -182,8 +182,8 @@ std::string Filters::findMostFrequentSequence(const std::string& input, int minL
     return mostFrequentSequence;
 }
 
-unordered_map<string, string> Filters::ListArrays(int& number_of_spacers) {
-    unordered_map<string, string> CRISPRArrays;
+unordered_map<string, vector<string>> Filters::ListArrays(int& number_of_spacers) {
+    unordered_map<string, vector<string>> CRISPRArrays;
     int counter = 0;
     for (const auto& [start_node, _] : cycles) {
         auto CRISPRArrayNodes = _FindCRISPRArrayNodes(start_node);
@@ -251,7 +251,7 @@ unordered_map<string, string> Filters::ListArrays(int& number_of_spacers) {
                 continue;
             }
 
-            CRISPRArrays[repeat] = all_cycles_togehter;
+            CRISPRArrays[repeat] = spacers;
         }
     }
     
@@ -270,7 +270,13 @@ int Filters::WriteToFile(const string& filename) {
     
     for (const auto& [repeat, spacers] : CRISPRArrays) {
         
-        file << spacers << "\n";
+        file << "Repeat: " << repeat << endl;
+        file << "Number of Spacers: " << spacers.size() << endl;
+        file << "Spacers:" << endl;
+        for (const auto& spacer : spacers) {
+            file << spacer << endl;
+        }
+        file <<"----------------------------------" << endl; // Add a blank line between different CRISPR arrays
 
         
     }

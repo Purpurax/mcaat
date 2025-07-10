@@ -20,6 +20,8 @@ option(TSAN "Enable thread sanitizers" OFF)
 # Include directories
 include_directories(include)
 include_directories(libs/megahit/src)
+add_subdirectory(libs/rapidfuzz-cpp)
+include_directories(libs/rapidfuzz-cpp)
 
 # Source files
 file(GLOB_RECURSE MAIN_SOURCE "src/*.cpp")
@@ -51,7 +53,6 @@ if (STATIC_BUILD)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif (STATIC_BUILD)
 
-add_subdirectory(libs/hwinfo)
 
 # Compiler and linker flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
@@ -77,7 +78,7 @@ if (STATIC_BUILD)
 endif (STATIC_BUILD)
 
 # Link libraries
-target_link_libraries(mcaat ${ZLIB_LIBRARIES} hwinfo::HWinfo)
+target_link_libraries(mcaat ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz)
 
 # Threading configuration
 if(THREADS_HAVE_PTHREAD_ARG)

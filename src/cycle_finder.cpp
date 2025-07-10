@@ -180,7 +180,7 @@ void CycleFinder::_GetOutgoings(auto node, unordered_set<uint64_t>& outgoings_se
     int flag = sdbg.OutgoingEdges(node, outgoings);
     if(flag!=-1)
         for (const auto& outgoing : outgoings)
-            if (sdbg.EdgeMultiplicity(outgoing) > 1)
+            //if (sdbg.EdgeMultiplicity(outgoing) > 1)
                 outgoings_set.insert(outgoing);
     
     
@@ -198,7 +198,7 @@ void CycleFinder::_GetIncomings(auto node, unordered_set<uint64_t>& incomings_se
     int flag = sdbg.IncomingEdges(node, incomings);
     if (flag!=-1)
         for (const auto& incoming : incomings)
-            if (sdbg.EdgeMultiplicity(incoming) > 1)
+            //if (sdbg.EdgeMultiplicity(incoming) > 1)
                 incomings_set.insert(incoming);
 }
 
