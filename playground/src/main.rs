@@ -4,9 +4,10 @@ use reads::Reads;
 
 use clap::Parser;
 
+pub mod cycle;
 pub mod graph;
 pub mod reads;
-pub mod cycle;
+pub mod tree;
 
 /// Program which basically filters out only relevant data for CRISPR array ordering
 #[derive(Parser, Debug)]
@@ -39,28 +40,42 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let graph = Graph::parse(args.graph_structure, args.graph_nodes);
-
-    let reads = Reads::parse(args.reads, args.reads_2.unwrap());
-    let m: usize = reads.reads.first().map_or(0, |read| read.nodes_between as usize + 1);
-
     let cycles: Vec<Cycle> = cycle::parse(args.cycles);
 
-    // println!("{:?}", reads);
-    // println!("\n\n\n\n{:?}", cycles);
+    let all_reads = Reads::parse(args.reads, args.reads_2.unwrap());
+    let m: usize = all_reads.reads.first().map_or(0, |read| read.nodes_between as usize + 1);
 
     // reads.export_as_desired_input(None);
     // cycle::export_as_desired_input(cycles, None);
 
-    if args.output {
-        let result_folder: String = "./results/".to_string();
+    let result_folder: String = "./results/".to_string();
 
-        graph.export_to_dot(&(result_folder.clone() + "output-full.dot")).expect("Failed outputing full graph into dot file");
+    let full_graph: Graph = Graph::parse(args.graph_structure, args.graph_nodes);
+    let relevant_graph: Graph = full_graph.keep_crispr_cycles(cycles.clone());
+    let mut crispr_subgraphs: Vec<Graph> = relevant_graph.get_strongly_connected_components();
+    crispr_subgraphs.iter_mut().for_each(|sub_graph: &mut Graph| {
+        sub_graph.extend_by_m_steps(m, &full_graph)
+    });
+
+    let problem_cases = crispr_subgraphs.into_iter()
+        .map(|subgraph| {
+            let relevant_reads: Reads = all_reads.get_relevant(&subgraph);
+            (subgraph, relevant_reads)
+        }).collect::<Vec<(Graph, Reads)>>();
+    
+    for (subgraph, reads) in problem_cases {
+        let crispr_sequence: String = subgraph.reconstruct_crispr_sequence(reads);
+    }
+
+    if args.output {
+        full_graph.export_to_dot(&(result_folder.clone() + "full-graph.dot")).expect("Failed outputing full graph into dot file");
+        relevant_graph.export_to_dot(&(result_folder.clone() + "all-crispr-arrays.dot")).expect("Failed outputing only crispr graph into dot file");
         
-        let mut relevant_graph: Graph = graph.keep_relevant(cycles.clone());
-        relevant_graph.export_to_dot(&(result_folder.clone() + "output-only-crispr.dot")).expect("Failed outputing only crispr graph into dot file");
-        
-        relevant_graph.extend_by_m_steps(m, graph);
-        relevant_graph.export_to_dot(&(result_folder + "output-relevant.dot")).expect("Failed outputing relevant graph into dot file");
+        for (i, mut subgraph) in relevant_graph.get_strongly_connected_components().into_iter().enumerate() {
+            subgraph.export_to_dot(&(result_folder.clone() + format!("one-crispr-array-{}.dot", i).as_str())).expect("Failed outputing relevant graph into dot file");
+    
+            subgraph.extend_by_m_steps(m, &full_graph);
+            subgraph.export_to_dot(&(result_folder.clone() + format!("one-crispr-array-extended-{}.dot", i).as_str())).expect("Failed outputing relevant graph into dot file");
+        }
     }
 }

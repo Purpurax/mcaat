@@ -1,5 +1,9 @@
+use std::collections::HashSet;
 
-const K: u64 = 23;
+use crate::graph::Graph;
+
+
+const K: usize = 23;
 #[derive(Clone, Debug)]
 pub struct Reads {
     pub reads: Vec<Read>
@@ -9,10 +13,16 @@ pub struct Read {
     pub sequence: String,
     pub start_k_mer: String,
     pub end_k_mer: String,
-    pub nodes_between: u64
+    pub nodes_between: usize
 }
 
 impl Reads {
+    pub fn new() -> Reads {
+        Reads {
+            reads: vec![]
+        }
+    }
+
     pub fn parse(reads_file_path_1: String, reads_file_path_2: String) -> Reads {
         let content_1: String = std::fs::read_to_string(&reads_file_path_1)
             .expect("Failed to read READS file 1")
@@ -67,7 +77,7 @@ impl Reads {
                     sequence: sequence.clone(),
                     start_k_mer: sequence[..K as usize].to_string(),
                     end_k_mer: sequence[(sequence.len() - K as usize)..].to_string(),
-                    nodes_between: (sequence.len() as u64).saturating_sub(K + 1)
+                    nodes_between: (sequence.len()).saturating_sub(K + 1)
                 }
             })
             .collect::<Vec<Read>>();
@@ -90,5 +100,19 @@ impl Reads {
                 "/home/master/Documents/UNI/Informatik/Semester-4/Bachelor/mcaat/data/desired_inputs/reads.csv".to_string()
             ), header + &content
         );
+    }
+
+    pub fn get_relevant(&self, graph: &Graph) -> Reads {
+        let unique_nodes_with_seqs: HashSet<String> = graph.get_unique_node_seq();
+
+        let mut relevant_reads = Reads::new();
+        for read in self.reads.clone().into_iter() {
+            if unique_nodes_with_seqs.contains(&read.start_k_mer)
+            && unique_nodes_with_seqs.contains(&read.end_k_mer) {
+                relevant_reads.reads.push(read);
+            }
+        }
+
+        relevant_reads
     }
 }
