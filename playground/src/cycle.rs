@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 pub type Cycle = Vec<u64>;
 
 pub fn parse(file_path: String) -> Vec<Cycle> {
@@ -12,4 +14,26 @@ pub fn parse(file_path: String) -> Vec<Cycle> {
                 .map(|id_str| id_str.parse::<u64>().unwrap_or(u64::MAX))
                 .collect::<Cycle>()
         }).collect::<Vec<Cycle>>()
+}
+
+pub fn export_as_desired_input(cycles: Vec<Cycle>, file_path: Option<String>) {
+    let mut all_nodes: Vec<u64> = cycles.into_iter()
+        .flat_map(|cycle| cycle.into_iter())
+        .collect::<HashSet<u64>>()
+        .into_iter()
+        .collect();
+    all_nodes.sort();
+
+    let content: String = all_nodes.into_iter()
+        .map(|distinct_cycle| {
+            distinct_cycle.to_string()
+        }).fold(String::new(), |a, b| a + " " + &b)
+        .trim()
+        .to_string();
+
+    let _ = std::fs::write(
+        file_path.unwrap_or(
+            "/home/master/Documents/UNI/Informatik/Semester-4/Bachelor/mcaat/data/desired_inputs/relevant_nodes.txt".to_string()
+        ), content
+    );
 }

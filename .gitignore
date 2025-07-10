@@ -12,7 +12,7 @@ Makefile
 test
 test_ids
 .timetracker
-/result/
+**/results/
 **/target/
 /lib/
 /libs/

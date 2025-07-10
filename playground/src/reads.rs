@@ -1,10 +1,10 @@
 
 const K: u64 = 23;
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Reads {
     pub reads: Vec<Read>
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Read {
     pub sequence: String,
     pub start_k_mer: String,
@@ -25,39 +25,41 @@ impl Reads {
 
         let iter_1 = content_1.split("\n")
             .filter(|line| {
-                line.starts_with("A")
-                || line.starts_with("T")
-                || line.starts_with("C")
-                || line.starts_with("G")
+                line.chars()
+                    .all(|char| char == 'A'
+                        || char == 'T'
+                        || char == 'C'
+                        || char == 'G')
             });
         let iter_2 = content_2.split("\n")
             .filter(|line| {
-                line.starts_with("A")
-                || line.starts_with("T")
-                || line.starts_with("C")
-                || line.starts_with("G")
+                line.chars()
+                    .all(|char| char == 'A'
+                        || char == 'T'
+                        || char == 'C'
+                        || char == 'G')
             });
 
-        let mut sequences: Vec<String> = vec![];
-
-        for (seq_1, seq_2) in iter_1.zip(iter_2) {
-            let seq_2_mod: String = seq_2.chars()
-                .rev()
-                .map(|nucl| {
-                    if nucl == 'A' {
-                        'T'
-                    } else if nucl == 'T' {
-                        'A'
-                    } else if nucl == 'C' {
-                        'G'
-                    } else if nucl == 'G' {
-                        'C'
-                    } else {
-                        nucl
-                    }
-                }).collect::<String>();
-            sequences.push(seq_1.to_string() + &seq_2_mod);
-        }
+        let sequences: Vec<String> = iter_1.map(|s| s.to_string())
+            .chain(
+                iter_2.map(|seq| {
+                    seq.chars()
+                        .rev()
+                        .map(|nucl| {
+                            if nucl == 'A' {
+                                'T'
+                            } else if nucl == 'T' {
+                                'A'
+                            } else if nucl == 'C' {
+                                'G'
+                            } else if nucl == 'G' {
+                                'C'
+                            } else {
+                                nucl
+                            }
+                        }).collect::<String>()
+                })
+            ).collect::<Vec<String>>();
 
         let reads: Vec<Read> = sequences.into_iter()
             .map(|sequence| {
@@ -71,5 +73,22 @@ impl Reads {
             .collect::<Vec<Read>>();
         
         Reads { reads }
+    }
+
+    pub fn export_as_desired_input(&self, file_path: Option<String>) {
+        let header: String = "read_start_k_mer,read_end_k_mer,nodes_between\n".to_string();
+        
+        let content: String = self.reads.clone().into_iter()
+            .map(|read| {
+                format!("{},{},{}", read.start_k_mer, read.end_k_mer, read.nodes_between)
+            }).fold(String::new(), |a, b| a + "\n" + &b)
+            .trim()
+            .to_string();
+
+        let _ = std::fs::write(
+            file_path.unwrap_or(
+                "/home/master/Documents/UNI/Informatik/Semester-4/Bachelor/mcaat/data/desired_inputs/reads.csv".to_string()
+            ), header + &content
+        );
     }
 }

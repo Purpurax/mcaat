@@ -1,5 +1,9 @@
+use std::collections::HashSet;
+use std::iter;
 use std::{collections::HashMap, fs::File, io};
 use std::io::Write;
+
+use crate::cycle::Cycle;
 
 
 pub struct Graph {
@@ -52,6 +56,65 @@ impl Graph {
             }).collect::<HashMap<u64, Vec<u64>>>();
 
         Graph { nodes, edges }
+    }
+
+    pub fn keep_relevant(&self, cycles: Vec<Cycle>) -> Graph {
+        let unique_nodes: HashSet<u64> = cycles.into_iter()
+            .flat_map(|cycle| cycle.into_iter())
+            .collect::<HashSet<u64>>();
+
+        let new_edges = self.edges.clone().into_iter()
+            .filter(|edge|
+                unique_nodes.contains(&edge.0)
+                || edge.1.iter().any(|end_node| unique_nodes.contains(end_node))
+            ).collect::<HashMap<u64, Vec<u64>>>();
+
+        let new_nodes = self.nodes.clone();
+
+        Graph { nodes: new_nodes, edges: new_edges }
+    }
+
+    pub fn extend_by_m_steps(&mut self, m: usize, full_graph: Graph) {
+        let mut nodes_to_check: HashSet<u64> = self.edges.keys()
+            .copied().collect();
+
+        let mut incoming_into_relevant: HashSet<u64> = HashSet::new();
+        let mut outgoing_from_relevant: HashSet<u64> = HashSet::new();
+        
+        let mut counter = 0;
+        while counter < m && !nodes_to_check.is_empty() {
+            // Check specified node for extensions
+            for node in nodes_to_check.drain() {
+                if let Some(to_nodes) = full_graph.edges.get(&node) {
+                    for to_node in to_nodes {
+                        if !self.edges.contains_key(to_node) {
+                            outgoing_from_relevant.insert(*to_node);
+                        }
+                    }
+                }
+                
+                // BRUTE FORCE
+                for (from_node, to_nodes) in &full_graph.edges {
+                    if to_nodes.contains(&node)
+                    && !self.edges.contains_key(from_node) {
+                        incoming_into_relevant.insert(*from_node);
+                    }
+                }
+            }
+
+            // Add the extensions as the new nodes_to_check for further extensions
+            nodes_to_check.extend(incoming_into_relevant.drain());
+            nodes_to_check.extend(outgoing_from_relevant.drain());
+
+            // Add as new edges to relevant graph
+            for node in nodes_to_check.iter() {
+                if let Some(edges) = full_graph.edges.get(node) {
+                    self.edges.insert(*node, edges.clone());
+                }
+            }
+
+            counter += 1;
+        }
     }
 
     pub fn export_to_dot(&self, path: &str) -> io::Result<()> {

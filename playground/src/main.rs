@@ -42,13 +42,25 @@ fn main() {
     let graph = Graph::parse(args.graph_structure, args.graph_nodes);
 
     let reads = Reads::parse(args.reads, args.reads_2.unwrap());
+    let m: usize = reads.reads.first().map_or(0, |read| read.nodes_between as usize + 1);
 
     let cycles: Vec<Cycle> = cycle::parse(args.cycles);
 
-    println!("{:?}", reads);
-    println!("\n\n\n\n{:?}", cycles);
+    // println!("{:?}", reads);
+    // println!("\n\n\n\n{:?}", cycles);
+
+    // reads.export_as_desired_input(None);
+    // cycle::export_as_desired_input(cycles, None);
 
     if args.output {
-        graph.export_to_dot("output.dot").expect("Failed outputing graph into dot file");
+        let result_folder: String = "./results/".to_string();
+
+        graph.export_to_dot(&(result_folder.clone() + "output-full.dot")).expect("Failed outputing full graph into dot file");
+        
+        let mut relevant_graph: Graph = graph.keep_relevant(cycles.clone());
+        relevant_graph.export_to_dot(&(result_folder.clone() + "output-only-crispr.dot")).expect("Failed outputing only crispr graph into dot file");
+        
+        relevant_graph.extend_by_m_steps(m, graph);
+        relevant_graph.export_to_dot(&(result_folder + "output-relevant.dot")).expect("Failed outputing relevant graph into dot file");
     }
 }
