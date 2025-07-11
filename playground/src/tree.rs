@@ -147,7 +147,8 @@ impl Tree {
             AddPathStage::ContinueAtNode(location.clone())
         } else {
             let location = self.add_node(None, node);
-            AddPathStage::NewNodes(location, location)
+            let root_index: usize = self.roots.len() - 1;
+            AddPathStage::NewNodes(root_index, location)
         }
     }
 
@@ -163,11 +164,8 @@ impl Tree {
             .next();
         if let Some(roots_index) = matching_root {
             let new_location = self.attach_root(roots_index, location);
-            // TCGGGCGGGCCGCTGTTTTTGTTGCGATCCCTCCAGGGGTGATGGGGCGACCTGCGGCGGTTGACACCAAGATGGCGGCCCTCTCCGTGTAGTTGCGATCCCTCCAGGGGTGATGGGGCGACCTGCGGCGGTTGACACCAAGATGGCGGCCCTCTCCGTGTAGTTGCGATCCCTCCAGGGGTGATGGGGCGACCTGCGGCGGTTGACACCAAGATGGCGGCCCTCTCCGTGTAGTTGCGATCCCTCCAGGGGTGATG
+            
             AddPathStage::ContinueAtNode(vec![new_location])
-            // let new_location = self.add_node(Some(location), node);
-            // TGCGATCCCTCCAGGGGTGATGGGGCGACCTGCGGCGGTTGACACCAAGATGGCGGCCCTCTCCGTGTAGTTGCGATCCCTCCAGGGGTGATGGGGCGACCTGCGGCGGTTGACACCAAGATGGCGGCCCTCTCCGTGTAGTTGCGATCCCTCCAGGGGTGATGGGGCGACCTGCGGCGGTTGACACCAAGATGGCGGCCCTCTCCGTGTAGTTGCGATCCCTCCAGGGGTGATG
-            // AddPathStage::ContinueAtNode(vec![roots_index, new_location])
         } else {
             let new_location = self.add_node(Some(location), node);
 

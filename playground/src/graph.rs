@@ -169,6 +169,9 @@ impl Graph {
                 if let Some(node_edges) = self.edges.get(&node) {
                     graph.edges.insert(node, node_edges.clone());
                 }
+                if self.crispr_nodes.contains(&node) {
+                    graph.crispr_nodes.insert(node);
+                }
             }
             graph
         }).collect::<Vec<Graph>>()
@@ -245,16 +248,13 @@ impl Graph {
             .collect();
 
         let mut order_tree: Tree = Tree::new();
-        println!("{}", reads.reads.len());
 
-        for (i, read) in reads.reads.into_iter().enumerate() {
+        for read in reads.reads {
             let start_node_id: u64 = *sequence_to_node_id_map.get(&read.start_k_mer).unwrap();
             let end_node_id: u64 = *sequence_to_node_id_map.get(&read.end_k_mer).unwrap();
             let paths: Vec<Vec<u64>> = self.find_path(start_node_id, end_node_id, read.nodes_between + 1);
         
-            // println!("{}, {:?}", paths.len(), paths);
             if paths.len() == 0 {
-                println!("WEIRD: The read has no path ?????");
                 continue
             } else if paths.len() == 1 && paths.first().unwrap().len() > 0 {
                 let path = paths.first().unwrap();
@@ -290,12 +290,12 @@ impl Graph {
                     order_tree.add_ordered_path(&partial_path);
                 }
             }
+        }
 
-            if let Some(ref folder) = output_folder {
-                let dot_filename = format!("{}_tree_after_reads_{}.dot", folder, i);
-                if let Err(e) = order_tree.export_to_dot(&dot_filename) {
-                    eprintln!("Failed to export order tree {}: {}", i, e);
-                }
+        if let Some(ref folder) = output_folder {
+            let dot_filename = format!("{}_tree.dot", folder);
+            if let Err(e) = order_tree.export_to_dot(&dot_filename) {
+                eprintln!("Failed to export order tree: {}", e);
             }
         }
 
@@ -304,6 +304,11 @@ impl Graph {
 
     pub fn extract_sequence(&self, tree: Tree) -> String {
         let path: Vec<u64> = tree.get_longest_path();
+
+        // println!("{:?}", path.clone().into_iter()
+        //     .map(|node_id| {
+        //         self.crispr_nodes.contains(&node_id)
+        //     }).collect::<Vec<bool>>());
 
         path.into_iter()
             .enumerate()
@@ -328,7 +333,6 @@ impl Graph {
         let mut file = File::create(path)?;
         writeln!(file, "digraph G {{")?;
 
-        // Add node labels
         for (node_id, node_label) in &self.nodes {
             writeln!(file, "  \"{}\" [label=\"{}\"];", node_id, node_label)?;
         }

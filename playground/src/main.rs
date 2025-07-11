@@ -45,9 +45,6 @@ fn main() {
     let all_reads = Reads::parse(args.reads, args.reads_2.unwrap());
     let m: usize = all_reads.reads.first().map_or(0, |read| read.nodes_between as usize + 1);
 
-    // reads.export_as_desired_input(None);
-    // cycle::export_as_desired_input(cycles, None);
-
     let result_folder: String = "./results/".to_string();
 
     let full_graph: Graph = Graph::parse(args.graph_structure, args.graph_nodes);
@@ -75,6 +72,9 @@ fn main() {
     }
 
     if args.output {
+        all_reads.export_as_desired_input(result_folder.clone() + "/desired-reads-output.csv");
+        cycle::export_as_desired_input(cycles, result_folder.clone() + "/desired-cycles-output.csv");
+
         full_graph.export_to_dot(&(result_folder.clone() + "full-graph.dot")).expect("Failed outputing full graph into dot file");
         relevant_graph.export_to_dot(&(result_folder.clone() + "all-crispr-arrays.dot")).expect("Failed outputing only crispr graph into dot file");
         

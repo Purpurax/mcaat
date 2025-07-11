@@ -53,7 +53,7 @@ impl Reads {
         Reads { reads }
     }
 
-    pub fn export_as_desired_input(&self, file_path: Option<String>) {
+    pub fn export_as_desired_input(&self, file_path: String) {
         let header: String = "read_start_k_mer,read_end_k_mer,nodes_between\n".to_string();
         
         let content: String = self.reads.clone().into_iter()
@@ -63,11 +63,7 @@ impl Reads {
             .trim()
             .to_string();
 
-        let _ = std::fs::write(
-            file_path.unwrap_or(
-                "/home/master/Documents/UNI/Informatik/Semester-4/Bachelor/mcaat/data/desired_inputs/reads.csv".to_string()
-            ), header + &content
-        );
+        let _ = std::fs::write(file_path, header + &content);
     }
 
     pub fn get_relevant(&self, graph: &Graph) -> Reads {

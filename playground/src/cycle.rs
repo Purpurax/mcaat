@@ -16,7 +16,7 @@ pub fn parse(file_path: String) -> Vec<Cycle> {
         }).collect::<Vec<Cycle>>()
 }
 
-pub fn export_as_desired_input(cycles: Vec<Cycle>, file_path: Option<String>) {
+pub fn export_as_desired_input(cycles: Vec<Cycle>, file_path: String) {
     let mut all_nodes: Vec<u64> = cycles.into_iter()
         .flat_map(|cycle| cycle.into_iter())
         .collect::<HashSet<u64>>()
@@ -31,9 +31,5 @@ pub fn export_as_desired_input(cycles: Vec<Cycle>, file_path: Option<String>) {
         .trim()
         .to_string();
 
-    let _ = std::fs::write(
-        file_path.unwrap_or(
-            "/home/master/Documents/UNI/Informatik/Semester-4/Bachelor/mcaat/data/desired_inputs/relevant_nodes.txt".to_string()
-        ), content
-    );
+    let _ = std::fs::write(file_path, content);
 }
