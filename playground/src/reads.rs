@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::graph::Graph;
+use fastq::{Parser, Record};
 
 
 const K: usize = 23;
@@ -24,63 +25,30 @@ impl Reads {
     }
 
     pub fn parse(reads_file_path_1: String, reads_file_path_2: String) -> Reads {
-        let content_1: String = std::fs::read_to_string(&reads_file_path_1)
-            .expect("Failed to read READS file 1")
-            .trim()
-            .to_string();
-        let content_2 = std::fs::read_to_string(&reads_file_path_2)
-            .expect("Failed to read READS file 2")
-            .trim()
-            .to_string();
+        let mut sequences = Vec::new();
+        
+        let parser = Parser::new(std::fs::File::open(&reads_file_path_1)
+            .expect("Failed to open READS file 1"));
+        parser.each(|record| {
+            sequences.push(std::str::from_utf8(record.seq()).unwrap().to_string());
+            true
+        }).expect("Failed to parse READS file 1");
+        
+        let parser = Parser::new(std::fs::File::open(&reads_file_path_2)
+            .expect("Failed to open READS file 2"));
+        parser.each(|record| {
+            sequences.push(std::str::from_utf8(record.seq()).unwrap().to_string());
+            true
+        }).expect("Failed to parse READS file 2");
 
-        let iter_1 = content_1.split("\n")
-            .filter(|line| {
-                line.chars()
-                    .all(|char| char == 'A'
-                        || char == 'T'
-                        || char == 'C'
-                        || char == 'G')
-            });
-        let iter_2 = content_2.split("\n")
-            .filter(|line| {
-                line.chars()
-                    .all(|char| char == 'A'
-                        || char == 'T'
-                        || char == 'C'
-                        || char == 'G')
-            });
-
-        let sequences: Vec<String> = iter_1.map(|s| s.to_string())
-            .chain(
-                iter_2.map(|seq| {
-                    seq.chars()
-                        .rev()
-                        .map(|nucl| {
-                            if nucl == 'A' {
-                                'T'
-                            } else if nucl == 'T' {
-                                'A'
-                            } else if nucl == 'C' {
-                                'G'
-                            } else if nucl == 'G' {
-                                'C'
-                            } else {
-                                nucl
-                            }
-                        }).collect::<String>()
-                })
-            ).collect::<Vec<String>>();
-
-        let reads: Vec<Read> = sequences.into_iter()
-            .map(|sequence| {
-                Read {
-                    sequence: sequence.clone(),
-                    start_k_mer: sequence[..K as usize].to_string(),
-                    end_k_mer: sequence[(sequence.len() - K as usize)..].to_string(),
-                    nodes_between: (sequence.len()).saturating_sub(K + 1)
-                }
-            })
-            .collect::<Vec<Read>>();
+        let reads: Vec<Read> = sequences.into_iter().map(|sequence| {
+            Read {
+                sequence: sequence.clone(),
+                start_k_mer: sequence[..K].to_string(),
+                end_k_mer: sequence[(sequence.len() - K)..].to_string(),
+                nodes_between: sequence.len().saturating_sub(K + 1)
+            }
+        }).collect();
         
         Reads { reads }
     }
