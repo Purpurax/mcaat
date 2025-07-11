@@ -61,10 +61,17 @@ fn main() {
         .map(|subgraph| {
             let relevant_reads: Reads = all_reads.get_relevant(&subgraph);
             (subgraph, relevant_reads)
-        }).collect::<Vec<(Graph, Reads)>>();
+        });
     
-    for (subgraph, reads) in problem_cases {
-        let crispr_sequence: String = subgraph.reconstruct_crispr_sequence(reads);
+    for (i, (subgraph, reads)) in problem_cases.enumerate() {
+        if args.output {
+            let folder = format!("{}{}{}", result_folder.clone(), "crispr_", i);
+            let crispr_sequence: String = subgraph.reconstruct_crispr_sequence(reads, Some(folder));
+            println!("{}: {}", i, crispr_sequence);
+        } else {
+            let crispr_sequence: String = subgraph.reconstruct_crispr_sequence(reads, None);
+            println!("{}: {}", i, crispr_sequence);
+        }
     }
 
     if args.output {

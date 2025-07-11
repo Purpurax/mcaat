@@ -16,3 +16,4 @@ test_ids
 **/target/
 /lib/
 /libs/
+playground/Cargo.lock

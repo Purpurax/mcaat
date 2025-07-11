@@ -224,7 +224,6 @@ impl Graph {
             return vec![]
         }
         
-        // Safe handling of missing nodes
         let Some(neighbors) = self.edges.get(&start) else {
             return vec![];
         };
@@ -240,43 +239,100 @@ impl Graph {
             .collect()
     }
 
-    pub fn reconstruct_crispr_sequence(&self, reads: Reads) -> String {
+    pub fn reconstruct_crispr_sequence(&self, reads: Reads, output_folder: Option<String>) -> String {
         let sequence_to_node_id_map: HashMap<String, u64> = self.nodes.iter()
             .map(|(node_id, sequence)| (sequence.clone(), *node_id))
             .collect();
 
         let mut order_tree: Tree = Tree::new();
+        println!("{}", reads.reads.len());
 
-        for read in reads.reads {
+        for (i, read) in reads.reads.into_iter().enumerate() {
             let start_node_id: u64 = *sequence_to_node_id_map.get(&read.start_k_mer).unwrap();
             let end_node_id: u64 = *sequence_to_node_id_map.get(&read.end_k_mer).unwrap();
-            let paths: Vec<Vec<u64>> = self.find_path(start_node_id, end_node_id, read.nodes_between);
+            let paths: Vec<Vec<u64>> = self.find_path(start_node_id, end_node_id, read.nodes_between + 1);
         
+            // println!("{}, {:?}", paths.len(), paths);
             if paths.len() == 0 {
+                println!("WEIRD: The read has no path ?????");
                 continue
             } else if paths.len() == 1 && paths.first().unwrap().len() > 0 {
                 let path = paths.first().unwrap();
 
                 order_tree.add_ordered_path(path);
             } else {
-                // TODO can still be used for ordering, by seeking similarities in the paths
-                continue
+                // Split into partial paths, that have the same nodes
+                let partial_paths: Vec<Vec<u64>> = paths.first()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, node)| {
+                        let all_paths_share_same_node: bool = paths.iter()
+                            .all(|node_to_check| {
+                                node == node_to_check.get(i).unwrap()
+                            });
+                        if all_paths_share_same_node {
+                            Some(*node)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<Option<u64>>>()
+                    .split(|node| *node == None)
+                    .map(|partial_path| {
+                        partial_path.into_iter()
+                            .map(|node| node.unwrap())
+                            .collect::<Vec<u64>>()
+                    })
+                    .collect::<Vec<Vec<u64>>>();
+
+                for partial_path in partial_paths {
+                    order_tree.add_ordered_path(&partial_path);
+                }
+            }
+
+            if let Some(ref folder) = output_folder {
+                let dot_filename = format!("{}_tree_after_reads_{}.dot", folder, i);
+                if let Err(e) = order_tree.export_to_dot(&dot_filename) {
+                    eprintln!("Failed to export order tree {}: {}", i, e);
+                }
             }
         }
 
-        "".to_string()
+        self.extract_sequence(order_tree)
+    }
+
+    pub fn extract_sequence(&self, tree: Tree) -> String {
+        let path: Vec<u64> = tree.get_longest_path();
+
+        path.into_iter()
+            .enumerate()
+            .map(|(i, node_id)| {
+                if i == 0 {
+                    self.nodes.get(&node_id)
+                        .unwrap()
+                        .clone()
+                } else {
+                    self.nodes.get(&node_id)
+                        .unwrap()
+                        .chars()
+                        .last()
+                        .unwrap()
+                        .to_string()
+                }
+            })
+            .collect::<String>()
     }
 
     pub fn export_to_dot(&self, path: &str) -> io::Result<()> {
         let mut file = File::create(path)?;
         writeln!(file, "digraph G {{")?;
 
-        // Example: Assuming self.nodes is a collection of node IDs
-        // for node_id in self.iter_nodes() {
-        //     writeln!(file, "  \"{}\";", node_id)?;
-        // }
+        // Add node labels
+        for (node_id, node_label) in &self.nodes {
+            writeln!(file, "  \"{}\" [label=\"{}\"];", node_id, node_label)?;
+        }
 
-        // Example: Assuming self.adj is an adjacency list like HashMap<u32, Vec<u32>>
         for (source, destinations) in &self.edges {
             for destination in destinations {
                 writeln!(file, "  \"{}\" -> \"{}\";", source, destination)?;
