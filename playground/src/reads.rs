@@ -4,7 +4,7 @@ use crate::graph::Graph;
 use fastq::{Parser, Record};
 
 
-const K: usize = 23;
+pub const K: usize = 23;
 #[derive(Clone, Debug)]
 pub struct Reads {
     pub reads: Vec<Read>

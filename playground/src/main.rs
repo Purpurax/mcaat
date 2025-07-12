@@ -4,10 +4,10 @@ use reads::Reads;
 
 use clap::Parser;
 
+pub mod assembly;
 pub mod cycle;
 pub mod graph;
 pub mod reads;
-pub mod tree;
 
 /// Program which basically filters out only relevant data for CRISPR array ordering
 #[derive(Parser, Debug)]
@@ -61,16 +61,10 @@ fn main() {
         });
     
     for (i, (subgraph, reads)) in problem_cases.enumerate() {
-        if args.output {
-            let folder = format!("{}{}{}", result_folder.clone(), "crispr_", i);
-            let crispr_sequence: String = subgraph.reconstruct_crispr_sequence(reads, Some(folder));
-            println!("{}: {}", i, crispr_sequence);
-        } else {
-            let crispr_sequence: String = subgraph.reconstruct_crispr_sequence(reads, None);
-            println!("{}: {}", i, crispr_sequence);
-        }
+        let crispr_sequence: String = assembly::greedy_assembly(subgraph, reads, args.output);
+        println!("{}: {}", i, crispr_sequence);
     }
-
+    
     if args.output {
         all_reads.export_as_desired_input(result_folder.clone() + "/desired-reads-output.csv");
         cycle::export_as_desired_input(cycles, result_folder.clone() + "/desired-cycles-output.csv");
