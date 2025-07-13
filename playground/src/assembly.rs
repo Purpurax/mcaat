@@ -22,137 +22,114 @@ fn get_unique_path(paths: Vec<Vec<u64>>) -> Vec<Option<u64>> {
         .collect::<Vec<Option<u64>>>()
 }
 
+fn sequences_match_at(
+    seq_a: &String,
+    seq_b: &String,
+    index_in_a: usize
+) -> bool {
+    seq_a.chars()
+        .skip(index_in_a)
+        .enumerate()
+        .all(|(i, character)| {
+            if i < seq_b.len() {
+                let other_character = seq_b.chars().nth(i).unwrap();
+                
+                other_character == 'N'
+                || character == 'N'
+                || character == other_character
+            } else {
+                true
+            }
+        })
+}
+
+fn overlay_onto_sequence_at(
+    seq_a: &mut String,
+    seq_b: &String,
+    index_in_a: usize
+) {
+    *seq_a = seq_a.chars()
+        .enumerate()
+        .map(|(i, char)| {
+            if i >= index_in_a
+            && i - index_in_a < seq_b.len()
+            && char == 'N' {
+                seq_b.chars().nth(i - index_in_a).unwrap()
+            } else {
+                char
+            }
+        }).collect();
+}
+
+fn extend_sequence_center(locked_sequence: &mut String, sequence_to_add: &String) -> bool {
+    let matching_indices = (0..(locked_sequence.len() - 1)).into_iter()
+        .filter(|index| {
+            sequences_match_at(&locked_sequence, sequence_to_add, *index)
+        })
+        .collect::<Vec<usize>>();
+    
+    for index in matching_indices.iter() {
+        overlay_onto_sequence_at(locked_sequence, sequence_to_add, *index);
+    }
+    
+    !matching_indices.is_empty()
+}
+
+fn extend_sequence_left(locked_sequence: &mut String, sequence_to_add: &String) -> bool {
+    let matching_indices = (0..(sequence_to_add.len().saturating_sub(K) + 1))
+        .into_iter()
+        .filter(|index| {
+            sequences_match_at(sequence_to_add, &locked_sequence, *index)
+        })
+        .collect::<Vec<usize>>();
+    
+    if matching_indices.len() > 0 {
+        let match_index = *matching_indices.last().unwrap();
+        let outside_chunk: String = sequence_to_add.chars().take(match_index).collect();
+        let inside_chunk: String = sequence_to_add.chars().skip(match_index).collect();
+        
+        overlay_onto_sequence_at(locked_sequence, &inside_chunk, 0);
+        locked_sequence.insert_str(0, &outside_chunk);
+
+        true
+    } else {
+        false
+    }
+}
+
+fn extend_sequence_right(locked_sequence: &mut String, sequence_to_add: &String) -> bool {
+    let matching_indices = (0..(locked_sequence.len().saturating_sub(K) + 1))
+        .into_iter()
+        .filter(|index| {
+            locked_sequence.len() - index <= sequence_to_add.len()
+        })
+        .filter(|index| {
+            sequences_match_at(&locked_sequence, sequence_to_add, *index)
+        })
+        .collect::<Vec<usize>>();
+
+    if matching_indices.len() > 0 {
+        let match_index = *matching_indices.last().unwrap();
+        let inside_chunk: String = sequence_to_add.chars().take(locked_sequence.len() - match_index).collect();
+        let outside_chunk: String = sequence_to_add.chars().skip(locked_sequence.len() - match_index).collect();
+        
+        overlay_onto_sequence_at(locked_sequence, &inside_chunk, match_index);
+        locked_sequence.push_str(&outside_chunk);
+
+        true
+    } else {
+        false
+    }
+}
+
 fn extend_sequence(locked_sequence: &mut String, sequence_to_add: &String) -> bool {
     if locked_sequence.len() < K || sequence_to_add.len() < K {
         return false
     }
-    
-    let mut index: usize = locked_sequence.len().saturating_sub(K) + 1;
-    let mut left_matches: Vec<usize> = vec![];
-    let mut center_matches: Vec<usize> = vec![];
-    let mut right_matches: Vec<usize> = vec![];
 
-    // right
-    while index > 0 {
-        index -= 1;
-
-        let early_termination: bool = locked_sequence.len() - index
-        > sequence_to_add.len();
-        if early_termination {
-            index = 0;
-            continue
-        }
-        
-        let is_matching: bool = locked_sequence.chars()
-            .skip(index)
-            .enumerate()
-            .all(|(i, character)| {
-                let add_seq_char = sequence_to_add.chars().nth(i).unwrap();
-                add_seq_char == 'N'
-                || character == 'N'
-                || character == add_seq_char
-            });
-        if is_matching {
-            right_matches.push(index)
-        }
-    }
-
-    // middle
-    index = locked_sequence.len();
-
-    while index > 0 {
-        index -= 1;
-        
-        let is_matching: bool = locked_sequence.chars()
-            .skip(index)
-            .enumerate()
-            .all(|(i, character)| {
-                if i < sequence_to_add.len() {
-                    let locked_seq_char = sequence_to_add.chars().nth(i).unwrap();
-                    locked_seq_char == 'N'
-                    || character == 'N'
-                    || character == locked_seq_char
-                } else {
-                    true
-                }
-            });
-        if is_matching {
-            center_matches.push(index)
-        }
-    }
-    
-    // left
-    index = sequence_to_add.len().saturating_sub(K) + 1;
-
-    while index > 0 {
-        index -= 1;
-        
-        let is_matching: bool = sequence_to_add.chars()
-            .skip(index)
-            .enumerate()
-            .all(|(i, character)| {
-                let locked_seq_char = locked_sequence.chars().nth(i).unwrap();
-                locked_seq_char == 'N'
-                || character == 'N'
-                || character == locked_seq_char
-            });
-        if is_matching {
-            left_matches.push(index)
-        }
-    }
-
-    // apply matches
-    if right_matches.len() > 0 {
-        let match_index = *right_matches.last().unwrap();
-        let inside_chunk: String = sequence_to_add.chars().take(locked_sequence.len() - match_index).collect();
-        let outside_chunk: String = sequence_to_add.chars().skip(locked_sequence.len() - match_index).collect();
-        
-        *locked_sequence = locked_sequence.chars()
-            .enumerate()
-            .map(|(i, char)| {
-                if i >= match_index && char == 'N' {
-                    inside_chunk.chars().nth(i - match_index).unwrap()
-                } else {
-                    char
-                }
-            })
-            .collect();
-        
-        locked_sequence.push_str(&outside_chunk);
-    }
-    for match_index in center_matches {
-        *locked_sequence = locked_sequence.chars()
-            .enumerate()
-            .map(|(i, char)| {
-                if i >= match_index
-                && i - match_index < sequence_to_add.len()
-                && char == 'N' {
-                    sequence_to_add.chars().nth(i - match_index).unwrap()
-                } else {
-                    char
-                }
-            }).collect();
-    }
-    if left_matches.len() > 0 {
-        let match_index = *left_matches.last().unwrap();
-        let outside_chunk: String = sequence_to_add.chars().take(match_index).collect();
-        let inside_chunk: String = sequence_to_add.chars().skip(match_index).collect();
-        
-        *locked_sequence = locked_sequence.chars()
-            .enumerate()
-            .map(|(i, char)| {
-                if i < inside_chunk.len() && char == 'N' {
-                    inside_chunk.chars().nth(i).unwrap()
-                } else {
-                    char
-                }
-            })
-            .collect();
-        locked_sequence.insert_str(0, &outside_chunk);
-    }
-
-
-    left_matches.len() > 0 || right_matches.len() > 0
+    extend_sequence_right(locked_sequence, sequence_to_add)
+    || extend_sequence_center(locked_sequence, sequence_to_add)
+    || extend_sequence_left(locked_sequence, sequence_to_add)
 }
 
 pub fn greedy_assembly(graph: Graph, reads: Reads, debug: bool) -> String {
@@ -204,7 +181,6 @@ pub fn greedy_assembly(graph: Graph, reads: Reads, debug: bool) -> String {
         )
     });
 
-    // println!("{:?}", sorted_reads);
     let mut final_sequence: String = sorted_reads.pop().unwrap();
 
     let mut reads_cycling_counter: usize = 0;
