@@ -1,4 +1,5 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash};
+use std::{collections::{HashMap, HashSet}, fs::File, io};
+use std::io::Write;
 
 use crate::{graph::Graph, reads::Reads};
 
@@ -80,44 +81,71 @@ fn get_jumps(graph: &Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>) -> Vec<(Vec
         }
     }
 
-    jumps = jumps.into_iter()
+    jumps.into_iter()
         .filter(|(start_cycles, end_cycles)| {
             !start_cycles.into_iter()
                 .all(|start_cycle| {
                     end_cycles.contains(start_cycle)
                 })
         })
-        .collect::<HashSet<(Vec<usize>, Vec<usize>)>>()
-        .into_iter()
-        .collect::<Vec<(Vec<usize>, Vec<usize>)>>();
-
-    jumps.sort_by(|(start_a, end_a), (start_b, end_b)| {
-        let a_score = start_a.len() + end_a.len();
-        let b_score = start_b.len() + end_b.len();
-
-        a_score.cmp(&b_score)
-    });
-
-    jumps
+        .collect::<Vec<(Vec<usize>, Vec<usize>)>>()
 }
 
-// fn left_hand_reduce_jumps(jumps: Vec<(usize, usize)>) -> HashMap<usize, Vec<usize>> {
-//     let mut reduced_jumps: HashMap<usize, Vec<usize>> = HashMap::new();
+fn get_nodes(jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> Vec<usize> {
+    let mut all_cycles = HashSet::new();
 
-//     for (start_cycle, end_cycle) in jumps.into_iter() {
-//         if reduced_jumps.contains_key(&start_cycle) {
-//             let already_contained_end_cycles = reduced_jumps.get_mut(&start_cycle).unwrap();
+    jumps.clone().into_iter()
+        .for_each(|(start_cycles, end_cycles)| {
+            for start_cycle in start_cycles {
+                all_cycles.insert(start_cycle);
+            }
+            for end_cycle in end_cycles {
+                all_cycles.insert(end_cycle);
+            }
+        });
 
-//             if !already_contained_end_cycles.contains(&end_cycle) {
-//                 already_contained_end_cycles.push(end_cycle);
-//             }
-//         } else {
-//             reduced_jumps.insert(start_cycle, vec![end_cycle]);
-//         }
-//     }
+    all_cycles.into_iter()
+        .collect::<Vec<usize>>()
+}
 
-//     reduced_jumps
-// }
+// start, end, weight
+fn get_edges(jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> HashMap<(usize, usize), f64> {
+    let all_cycles: Vec<usize> = get_nodes(jumps);
+
+    let mut edges = all_cycles.clone().into_iter()
+        .flat_map(|node| {
+            all_cycles.clone().into_iter()
+                .map(move |other_node| {
+                    ((node, other_node), 0.0)
+                })
+        }).collect::<HashMap<(usize, usize), f64>>();
+
+    for (start_cycles, end_cycles) in jumps.clone() {
+        for start_cycle in start_cycles.clone() {
+            for end_cycle in end_cycles.clone() {
+                let confidence = (start_cycles.len() * end_cycles.len()) as f64;
+                *edges.get_mut(&(start_cycle, end_cycle)).unwrap() += confidence;
+            }
+        }
+    }
+
+    edges
+}
+
+pub fn export_to_dot(nodes: &Vec<usize>, edges: &HashMap<(usize, usize), f64>, file_path: &str) -> io::Result<()> {
+    let mut file = File::create(file_path)?;
+    writeln!(file, "digraph G {{")?;
+
+    for source in nodes.clone() {
+        for destination in nodes.clone() {
+            let weight = edges.get(&(source, destination)).unwrap();
+            writeln!(file, "  \"{}\" -> \"{}\" [label=\"{}\"];", source, destination, weight)?;
+        }
+    }
+
+    writeln!(file, "}}")?;
+    Ok(())
+}
 
 fn get_possible_start_cycles(jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> Vec<usize> {
     let possible_cycles = jumps.into_iter()
@@ -129,6 +157,52 @@ fn get_possible_start_cycles(jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> Vec<usize
         .collect::<Vec<usize>>();
     
     possible_cycles
+}
+
+fn reconstruct_cycle_order_using_constraint_graph(
+    nodes: &Vec<usize>,
+    edges: &HashMap<(usize, usize), f64>,
+    start_node: usize
+) -> (Vec<usize>, Vec<f64>) {
+    let mut order = vec![];
+    let mut overall_confidence: Vec<f64> = vec![];
+    let mut current_node_opt: Option<usize> = Some(start_node);
+
+    while let Some(current_node) = current_node_opt {
+        order.push(current_node);
+        // greedy by confidence
+        let remaining_nodes = nodes.clone()
+            .into_iter()
+            .filter(|node| {
+                !order.contains(node)
+            });
+        
+        let mut best_node: Option<usize> = None;
+        let mut best_confidence: f64 = 0.0;
+
+        let normalize_confidence: f64 = nodes.clone()
+            .into_iter()
+            .map(|node| {
+                *edges.get(&(current_node, node)).unwrap()
+            })
+            .sum::<f64>();
+
+        for destination in remaining_nodes {
+            let edge_weight = *edges.get(&(current_node, destination)).unwrap();
+            if edge_weight > best_confidence {
+                best_confidence = edge_weight;
+                best_node = Some(destination);
+            }
+        }
+
+        if best_node.is_some() {
+            overall_confidence.push(best_confidence / normalize_confidence);
+        }
+
+        current_node_opt = best_node;
+    }
+
+    (order, overall_confidence)
 }
 
 fn reconstruct_cycle_order_from_start(start_cycle: usize, jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> Vec<usize> {
@@ -213,13 +287,29 @@ pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bo
     let jumps = get_jumps(&graph, reads, raw_cycles);
     // let jumps = left_hand_reduce_jumps(full_jumps);
     // println!("jumps: {:?}", jumps);
+    let nodes = get_nodes(&jumps);
+    let edges = get_edges(&jumps);
+
+    let _ = export_to_dot(&nodes, &edges, "./results/assemply-graph.dot");
     
     let start_cycles: Vec<usize> = get_possible_start_cycles(&jumps);
-    
-    for start_cycle in start_cycles {
-        let cycle_order: Vec<usize> = reconstruct_cycle_order_from_start(start_cycle, &jumps);
-        println!("{} has cycle order: {:?}", start_cycle, cycle_order);
-    }
+    let orders_with_confidence = start_cycles.into_iter().map(|start_cycle| {
+        // let cycle_order: Vec<usize> = reconstruct_cycle_order_from_start(start_cycle, &jumps);
+        let (cycle_order, partial_confidences): (Vec<usize>, Vec<f64>) =
+            reconstruct_cycle_order_using_constraint_graph(&nodes, &edges, start_cycle);
+        let confidence = partial_confidences.into_iter().sum::<f64>();
+        println!("{} has cycle order {:?} with a confidence of {:?}", start_cycle, cycle_order, confidence);
+
+        (cycle_order, confidence)
+    });
+
+    let best_order = orders_with_confidence.max_by(|(_, conf_a), (_, conf_b)| {
+        conf_a.partial_cmp(conf_b).unwrap()
+    })
+    .map(|(order, _)| order)
+    .unwrap();
+
+    println!("Best order is {:?}", best_order);
 
     "".to_string()
 }
