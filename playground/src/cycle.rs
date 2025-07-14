@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-pub type Cycle = Vec<u64>;
-
-pub fn parse(file_path: String) -> Vec<Cycle> {
+pub fn parse(file_path: String) -> Vec<Vec<u64>> {
     let content: String = std::fs::read_to_string(&file_path)
         .expect("Failed to read file for cycles");
 
@@ -12,11 +10,11 @@ pub fn parse(file_path: String) -> Vec<Cycle> {
         .map(|line| {
             line.split(" ")
                 .map(|id_str| id_str.parse::<u64>().unwrap_or(u64::MAX))
-                .collect::<Cycle>()
-        }).collect::<Vec<Cycle>>()
+                .collect::<Vec<u64>>()
+        }).collect::<Vec<Vec<u64>>>()
 }
 
-pub fn export_as_desired_input(cycles: Vec<Cycle>, file_path: String) {
+pub fn export_as_desired_input(cycles: Vec<Vec<u64>>, file_path: String) {
     let mut all_nodes: Vec<u64> = cycles.into_iter()
         .flat_map(|cycle| cycle.into_iter())
         .collect::<HashSet<u64>>()

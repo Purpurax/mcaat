@@ -1,9 +1,9 @@
-use cycle::Cycle;
 use graph::Graph;
 use reads::Reads;
 
 use clap::Parser;
 
+pub mod matching_assembly;
 pub mod assembly;
 pub mod cycle;
 pub mod graph;
@@ -40,7 +40,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let cycles: Vec<Cycle> = cycle::parse(args.cycles);
+    let cycles: Vec<Vec<u64>> = cycle::parse(args.cycles);
 
     let all_reads = Reads::parse(args.reads, args.reads_2.unwrap());
     let m: usize = all_reads.reads.first().map_or(0, |read| read.nodes_between as usize + 1);
@@ -61,7 +61,7 @@ fn main() {
         });
     
     for (i, (subgraph, reads)) in problem_cases.enumerate() {
-        let crispr_sequence: String = assembly::greedy_assembly(subgraph, reads, args.output);
+        let crispr_sequence: String = assembly::assembly(subgraph, reads, cycles.clone(), args.output);
         println!("{}: {}", i, crispr_sequence);
     }
     

@@ -2,8 +2,6 @@ use std::collections::HashSet;
 use std::{collections::HashMap, fs::File, io};
 use std::io::Write;
 
-use crate::cycle::Cycle;
-
 
 pub struct Graph {
     pub nodes: HashMap<u64, String>,
@@ -87,7 +85,7 @@ impl Graph {
             .collect::<HashSet<String>>()
     }
 
-    pub fn keep_crispr_cycles(&self, cycles: Vec<Cycle>) -> Graph {
+    pub fn keep_crispr_cycles(&self, cycles: Vec<Vec<u64>>) -> Graph {
         let unique_cycle_nodes: HashSet<u64> = cycles.into_iter()
             .flat_map(|cycle| cycle.into_iter())
             .collect::<HashSet<u64>>();
