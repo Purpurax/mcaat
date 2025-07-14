@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, hash::Hash};
 
 use crate::{graph::Graph, reads::Reads};
 
@@ -38,20 +38,20 @@ fn map_reads_to_node_id_pairs(reads: Reads, graph: &Graph) -> Vec<(u64, u64, usi
         .collect::<Vec<(u64, u64, usize)>>()
 }
 
-fn get_jumps(graph: &Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>) -> Vec<(usize, usize)> {
+fn get_jumps(graph: &Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>) -> Vec<(Vec<usize>, Vec<usize>)> {
     let node_to_cycle: HashMap<u64, Vec<usize>> = get_node_to_cycle_map(raw_cycles);
 
-    let mut jumps: Vec<(usize, usize)> = vec![];
+    let mut jumps: Vec<(Vec<usize>, Vec<usize>)> = vec![];
 
     for (start_node_id, end_node_id, node_in_between) in map_reads_to_node_id_pairs(reads, &graph) {
         let paths = graph.find_path(start_node_id, end_node_id, node_in_between + 1);
 
-        let mut unique_cycles_on_path = paths.first()
+        let mut cycle_indices_order = paths.first()
             .unwrap()
             .iter()
             .enumerate()
-            .filter_map(|(i, _)| {
-                let nodes_cycles = paths.iter()
+            .map(|(i, _)| {
+                paths.iter()
                     .map(|path| {
                         path.get(i).unwrap()
                     })
@@ -64,104 +64,162 @@ fn get_jumps(graph: &Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>) -> Vec<(usi
                     .map(|x| *x)
                     .collect::<HashSet<usize>>()
                     .into_iter()
-                    .collect::<Vec<usize>>();
-                
-                if nodes_cycles.len() == 1 {
-                    Some(*nodes_cycles.first().unwrap())
-                } else {
-                    None
-                }
+                    .collect::<Vec<usize>>()
             })
-            .collect::<Vec<usize>>();
-        
-        if unique_cycles_on_path.len() < 2 {
-            println!("The read does not contain a good jump");
-        }
+            .collect::<Vec<Vec<usize>>>();
 
-        while unique_cycles_on_path.len() >= 2 {
-            let first_cycle_index: usize = unique_cycles_on_path.remove(0);
-            jumps.push((
-                first_cycle_index,
-                *unique_cycles_on_path.first().unwrap()
-            ))
-        }
-    }
+        while cycle_indices_order.len() >= 2 {
+            let first_cycle_index: Vec<usize> = cycle_indices_order.remove(0);
 
-    jumps.into_iter()
-        .filter(|(start_cycle, end_cycle)| {
-            start_cycle != end_cycle
-        }).collect::<Vec<(usize, usize)>>()
-}
-
-fn left_hand_reduce_jumps(jumps: Vec<(usize, usize)>) -> HashMap<usize, Vec<usize>> {
-    let mut reduced_jumps: HashMap<usize, Vec<usize>> = HashMap::new();
-
-    for (start_cycle, end_cycle) in jumps.into_iter() {
-        if reduced_jumps.contains_key(&start_cycle) {
-            let already_contained_end_cycles = reduced_jumps.get_mut(&start_cycle).unwrap();
-
-            if !already_contained_end_cycles.contains(&end_cycle) {
-                already_contained_end_cycles.push(end_cycle);
+            for landing_cycle_index in cycle_indices_order.iter() {
+                jumps.push((
+                    first_cycle_index.clone(),
+                    landing_cycle_index.clone()
+                ))
             }
-        } else {
-            reduced_jumps.insert(start_cycle, vec![end_cycle]);
         }
     }
 
-    reduced_jumps
+    jumps = jumps.into_iter()
+        .filter(|(start_cycles, end_cycles)| {
+            !start_cycles.into_iter()
+                .all(|start_cycle| {
+                    end_cycles.contains(start_cycle)
+                })
+        })
+        .collect::<HashSet<(Vec<usize>, Vec<usize>)>>()
+        .into_iter()
+        .collect::<Vec<(Vec<usize>, Vec<usize>)>>();
+
+    jumps.sort_by(|(start_a, end_a), (start_b, end_b)| {
+        let a_score = start_a.len() + end_a.len();
+        let b_score = start_b.len() + end_b.len();
+
+        a_score.cmp(&b_score)
+    });
+
+    jumps
 }
 
-fn get_possible_start_cycles(jumps: &HashMap<usize, Vec<usize>>) -> usize {
-    let all_start_cycles = jumps.keys().into_iter().map(|x| *x).collect::<Vec<usize>>();
+// fn left_hand_reduce_jumps(jumps: Vec<(usize, usize)>) -> HashMap<usize, Vec<usize>> {
+//     let mut reduced_jumps: HashMap<usize, Vec<usize>> = HashMap::new();
 
-    let mut sorted_jumps = jumps.into_iter().map(|(k, v)| (*k, v.clone())).collect::<Vec<(usize, Vec<usize>)>>();
+//     for (start_cycle, end_cycle) in jumps.into_iter() {
+//         if reduced_jumps.contains_key(&start_cycle) {
+//             let already_contained_end_cycles = reduced_jumps.get_mut(&start_cycle).unwrap();
+
+//             if !already_contained_end_cycles.contains(&end_cycle) {
+//                 already_contained_end_cycles.push(end_cycle);
+//             }
+//         } else {
+//             reduced_jumps.insert(start_cycle, vec![end_cycle]);
+//         }
+//     }
+
+//     reduced_jumps
+// }
+
+fn get_possible_start_cycles(jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> Vec<usize> {
+    let possible_cycles = jumps.into_iter()
+        .flat_map(|(start_cycles, _)| {
+            start_cycles.clone()
+        })
+        .collect::<HashSet<usize>>()
+        .into_iter()
+        .collect::<Vec<usize>>();
     
-    sorted_jumps.sort_by(|(_, landing_cycle_indices_a), (_, landing_cycle_indices_b)| {
-            landing_cycle_indices_a.len().cmp(&landing_cycle_indices_b.len())
-        });
-
-    if sorted_jumps.len() == 0 {
-        panic!("There are not enough reads, as no start_cycle was found");
-    }
-    if sorted_jumps.first().unwrap().1.len() > 1 {
-        panic!("The start_cycle is not clear as every node has an incoming edge");
-    }
-    if sorted_jumps.len() >= 1
-    && sorted_jumps.get(1).unwrap().1.len() == 1 {
-        println!("WARNING: multiple start cycles are possible, and one of them has been chosen");
-    }
-
-    sorted_jumps.first().unwrap().0
+    possible_cycles
 }
 
-fn reconstruct_cycle_order_from_start(start_cycle: usize, jumps: HashMap<usize, Vec<usize>>) -> Vec<usize> {
-    let mut next_cycles: Vec<usize> = jumps.get(&start_cycle).unwrap().clone();
+fn reconstruct_cycle_order_from_start(start_cycle: usize, jumps: &Vec<(Vec<usize>, Vec<usize>)>) -> Vec<usize> {
+    let mut cycle_order: Vec<usize> = vec![];
+    let mut next_cycle_opt: Option<usize> = Some(start_cycle);
 
-    let mut cycle_order: Vec<usize> = vec![start_cycle];
+    while let Some(next_cycle) = next_cycle_opt {
+        cycle_order.push(next_cycle);
 
-    while !next_cycles.is_empty() {
-        if next_cycles.len() == 1 {
-            let next_cycle = next_cycles.pop().unwrap();
-            cycle_order.push(next_cycle);
+        // remove cycle from jumps
+        let filtered_jumps = jumps.into_iter()
+            .map(|(start_cycles, end_cycles)| {
+                (
+                    start_cycles.into_iter()
+                        .filter(|start_cycle| {
+                            !cycle_order.contains(*start_cycle)
+                            || **start_cycle == next_cycle
+                        })
+                        .map(|x| *x)
+                        .collect::<Vec<usize>>(),
+                    end_cycles.into_iter()
+                        .filter(|end_cycle| {
+                            !cycle_order.contains(*end_cycle)
+                            || **end_cycle == next_cycle
+                        })
+                        .map(|x| *x)
+                        .collect::<Vec<usize>>()
+                )
+            })
+            .filter(|(start, end)| {
+                start.len() != 0 && end.len() != 0
+            })
+            .collect::<Vec<(Vec<usize>, Vec<usize>)>>();
+        // println!("f_j: {:?}", filtered_jumps.clone()
+        //     .into_iter()
+        //     .filter(|(start_cycles, end_cycles)| {
+        //         start_cycles.len() == 1 || end_cycles.len() == 1
+        //     })
+        //     .collect::<Vec<(Vec<usize>, Vec<usize>)>>()
+        // );
 
-            next_cycles = jumps.get(&next_cycle).unwrap().clone();
-        } else {
-            panic!("WARNING: The next cycle is ambiguous");
+        let mut cycle_to_cycles_map: HashMap<usize, Vec<usize>> = HashMap::new();
+        
+        for (start_cycle, end_cycle) in  filtered_jumps.into_iter()
+            // .filter(|(start_cycles, end_cycles)| {
+            //     start_cycles.len() == 1 && end_cycles.len() == 1
+            // })
+            // .map(|(start_cycles, end_cycles)| {
+            //     (start_cycles.first().unwrap().clone(), end_cycles.first().unwrap().clone())
+            // }) {
+            .filter(|(start_cycles, end_cycles)| {
+                start_cycles.len() == 1 && end_cycles.len() == 1
+            })
+            .map(|(start_cycles, end_cycles)| {
+                (start_cycles.first().unwrap().clone(), end_cycles.first().unwrap().clone())
+            }) {
+
+            if cycle_to_cycles_map.contains_key(&start_cycle) {
+                cycle_to_cycles_map.get_mut(&start_cycle).unwrap().push(end_cycle);
+            } else {
+                cycle_to_cycles_map.insert(start_cycle, vec![end_cycle]);
+            }
         }
+
+        let cycle_to_cycle_map = cycle_to_cycles_map.clone().into_iter()
+            .filter(|(_, values)| {
+                values.len() == 1
+            })
+            .map(|(key, values)| {
+                (key, *values.first().unwrap())
+            })
+            .collect::<HashMap<usize, usize>>();
+        // println!("{:?}", cycle_to_cycles_map);
+
+        next_cycle_opt = cycle_to_cycle_map.get(&next_cycle).copied();
     }
 
     cycle_order
 }
 
 pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bool) -> String {
-    let full_jumps = get_jumps(&graph, reads, raw_cycles);
-    let jumps = left_hand_reduce_jumps(full_jumps);
-    println!("jumps: {:?}", jumps);
+    let jumps = get_jumps(&graph, reads, raw_cycles);
+    // let jumps = left_hand_reduce_jumps(full_jumps);
+    // println!("jumps: {:?}", jumps);
     
-    let start_cycle: usize = get_possible_start_cycles(&jumps);
+    let start_cycles: Vec<usize> = get_possible_start_cycles(&jumps);
     
-    let cycle_order: Vec<usize> = reconstruct_cycle_order_from_start(start_cycle, jumps);
-    println!("{:?}", cycle_order);
+    for start_cycle in start_cycles {
+        let cycle_order: Vec<usize> = reconstruct_cycle_order_from_start(start_cycle, &jumps);
+        println!("{} has cycle order: {:?}", start_cycle, cycle_order);
+    }
 
     "".to_string()
 }
