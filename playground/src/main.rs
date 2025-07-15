@@ -57,11 +57,12 @@ fn main() {
     let problem_cases = crispr_subgraphs.into_iter()
         .map(|subgraph| {
             let relevant_reads: Reads = all_reads.get_relevant(&subgraph);
-            (subgraph, relevant_reads)
+            let relevant_cycles: Vec<Vec<u64>> = cycle::get_relevant_cycles(&cycles, &subgraph);
+            (subgraph, relevant_reads, relevant_cycles)
         });
     
-    for (i, (subgraph, reads)) in problem_cases.enumerate() {
-        let crispr_sequence: String = assembly::assembly(subgraph, reads, cycles.clone(), args.output);
+    for (i, (subgraph, reads, cycles)) in problem_cases.enumerate() {
+        let crispr_sequence: String = assembly::assembly(subgraph, reads, cycles, args.output);
         println!("{}: {}", i, crispr_sequence);
     }
     
