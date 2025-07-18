@@ -3,11 +3,12 @@ use reads::Reads;
 
 use clap::Parser;
 
-pub mod matching_assembly;
+// pub mod matching_assembly;
 pub mod assembly;
 pub mod cycle;
 pub mod graph;
 pub mod reads;
+pub mod test;
 
 /// Program which basically filters out only relevant data for CRISPR array ordering
 #[derive(Parser, Debug)]
@@ -38,6 +39,9 @@ struct Args {
 }
 
 fn main() {
+    // test::test();
+    // panic!("a");
+
     let args = Args::parse();
 
     let cycles: Vec<Vec<u64>> = cycle::parse(args.cycles);
@@ -62,7 +66,8 @@ fn main() {
         });
     
     for (i, (subgraph, reads, cycles)) in problem_cases.enumerate() {
-        let crispr_sequence: String = assembly::assembly(subgraph, reads, cycles, args.output);
+        let crispr_sequence: String = assembly::assembly(subgraph, reads.clone(), cycles, args.output);
+        println!("Used reads: {:?}", reads);
         println!("{}: {}", i, crispr_sequence);
     }
     

@@ -13,6 +13,7 @@ pub struct Reads {
 pub struct Read {
     pub sequence: String,
     pub start_k_mer: String,
+    pub middle_k_mer: String,
     pub end_k_mer: String,
     pub nodes_between: usize
 }
@@ -45,6 +46,7 @@ impl Reads {
             Read {
                 sequence: sequence.clone(),
                 start_k_mer: sequence[..K].to_string(),
+                middle_k_mer: sequence[(sequence.len() - K) / 2..(sequence.len() + K) / 2].to_string(),
                 end_k_mer: sequence[(sequence.len() - K)..].to_string(),
                 nodes_between: sequence.len().saturating_sub(K + 1)
             }
@@ -54,11 +56,11 @@ impl Reads {
     }
 
     pub fn export_as_desired_input(&self, file_path: String) {
-        let header: String = "read_start_k_mer,read_end_k_mer,nodes_between\n".to_string();
+        let header: String = "read_start_k_mer,read_middle_k_mer,read_end_k_mer,nodes_between\n".to_string();
         
         let content: String = self.reads.clone().into_iter()
             .map(|read| {
-                format!("{},{},{}", read.start_k_mer, read.end_k_mer, read.nodes_between)
+                format!("{},{},{},{}", read.start_k_mer, read.middle_k_mer, read.end_k_mer, read.nodes_between)
             }).fold(String::new(), |a, b| a + "\n" + &b)
             .trim()
             .to_string();
@@ -72,6 +74,7 @@ impl Reads {
         let mut relevant_reads = Reads::new();
         for read in self.reads.clone().into_iter() {
             if unique_nodes_with_seqs.contains(&read.start_k_mer)
+            && unique_nodes_with_seqs.contains(&read.middle_k_mer)
             && unique_nodes_with_seqs.contains(&read.end_k_mer) {
                 relevant_reads.reads.push(read);
             }

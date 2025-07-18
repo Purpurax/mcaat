@@ -25,7 +25,7 @@ fn get_node_to_cycle_map(raw_cycles: &Vec<Vec<u64>>) -> HashMap<u64, Vec<usize>>
     node_to_cycle
 }
 
-fn map_reads_to_node_id_pairs(reads: Reads, graph: &Graph) -> Vec<(u64, u64, usize)> {
+fn map_reads_to_node_id_pairs(reads: Reads, graph: &Graph) -> Vec<(u64, u64, u64, usize)> {
     let sequence_to_node_id_map: HashMap<String, u64> = graph.nodes.iter()
         .map(|(node_id, sequence)| (sequence.clone(), *node_id))
         .collect();
@@ -33,11 +33,12 @@ fn map_reads_to_node_id_pairs(reads: Reads, graph: &Graph) -> Vec<(u64, u64, usi
     reads.reads.into_iter()
         .map(|read| {
             let start_node_id: u64 = *sequence_to_node_id_map.get(&read.start_k_mer).unwrap();
+            let middle_node_id: u64 = *sequence_to_node_id_map.get(&read.middle_k_mer).unwrap();
             let end_node_id: u64 = *sequence_to_node_id_map.get(&read.end_k_mer).unwrap();
             
-            (start_node_id, end_node_id, read.nodes_between)
+            (start_node_id, middle_node_id, end_node_id, read.nodes_between)
         })
-        .collect::<Vec<(u64, u64, usize)>>()
+        .collect::<Vec<(u64, u64, u64, usize)>>()
 }
 
 pub fn export_to_dot(nodes: &Vec<usize>, edges: &HashMap<(usize, usize), f64>, file_path: &str) -> io::Result<()> {
@@ -58,11 +59,14 @@ pub fn export_to_dot(nodes: &Vec<usize>, edges: &HashMap<(usize, usize), f64>, f
 fn generate_constraints(graph: &Graph, reads: Reads, raw_cycles: &Vec<Vec<u64>>) -> HashSet<(Vec<usize>, Vec<usize>)> {
     let node_to_cycle: HashMap<u64, Vec<usize>> = get_node_to_cycle_map(raw_cycles);
 
+    println!("nodes_to_cycles_map: {:?}", node_to_cycle);
+
     let mut constraints: HashSet<(Vec<usize>, Vec<usize>)> = HashSet::new();
 
-    for (start_node_id, end_node_id, node_in_between) in map_reads_to_node_id_pairs(reads, graph) {
-        let paths = graph.find_path(start_node_id, end_node_id, node_in_between + 1);
-
+    for (start_node_id, middle_node_id, end_node_id, node_in_between)
+    in map_reads_to_node_id_pairs(reads, graph) {
+        let paths = graph.find_path(start_node_id, middle_node_id, end_node_id, node_in_between);
+        println!("{}", paths.len());
         let cycles_on_path = paths.first()
             .unwrap()
             .iter()

@@ -216,7 +216,31 @@ impl Graph {
         }
     }
 
-    pub fn find_path(&self, start: u64, end: u64, node_count: usize) -> Vec<Vec<u64>> {
+    pub fn find_path(&self, start: u64, middle: u64, end: u64, node_count: usize) -> Vec<Vec<u64>> {
+        let start_to_middle_paths = self.find_path_rec(start, middle, node_count / 2 + 1);
+        let middle_to_end_paths = self.find_path_rec(middle, end, node_count - node_count / 2);
+        
+        // println!("{}, {}", start_to_middle_paths.len(), middle_to_end_paths.len());
+        // (0..(node_count + 1)).into_iter()
+        //     .filter(|length| self.find_path_rec(middle, end, *length).len() != 0)
+        //     .for_each(|length| {
+        //         println!("{} -- {}", node_count, length);
+        //     });
+        let mut combined_paths = Vec::new();
+
+        for start_path in &start_to_middle_paths {
+            for end_path in &middle_to_end_paths {
+            let mut combined_path = start_path.clone();
+
+            combined_path.extend_from_slice(&end_path[1..]);
+            combined_paths.push(combined_path);
+            }
+        }
+        
+        combined_paths
+    }
+        
+    fn find_path_rec(&self, start: u64, end: u64, node_count: usize) -> Vec<Vec<u64>> {
         if node_count == 0 && start == end {
             return vec![vec![end]]
         } else if node_count == 0 {
@@ -229,7 +253,7 @@ impl Graph {
         
         neighbors.iter()
             .flat_map(|&next_node| {
-                let mut sub_paths = self.find_path(next_node, end, node_count - 1);
+                let mut sub_paths = self.find_path_rec(next_node, end, node_count - 1);
                 for sub_path in &mut sub_paths {
                     sub_path.insert(0, start);
                 }
