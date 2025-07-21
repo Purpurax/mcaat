@@ -56,37 +56,87 @@ pub fn export_to_dot(nodes: &Vec<usize>, edges: &HashMap<(usize, usize), f64>, f
     Ok(())
 }
 
+fn get_reads_path(graph: &Graph, reads: &Reads) -> Vec<Vec<u64>> {
+    const K: usize = 23;
+
+    reads.reads.clone().into_iter()
+        .map(|read| {
+            let sequence = read.sequence;
+
+            let mut node_seq = vec![];
+            let mut counter = 0;
+            while counter + K < sequence.chars().count() {
+                node_seq.push(
+                    sequence.chars()
+                        .skip(counter)
+                        .take(K)
+                        .collect::<String>()
+                );
+
+                counter += 1;
+            }
+
+            let node_id_to_seq: HashMap<String, u64> = graph.nodes
+                .iter()
+                .map(|(node_id, seq)| (seq.clone(), *node_id))
+                .collect();
+
+            node_seq.into_iter()
+                .map(|node_s| {
+                    node_id_to_seq.get(&node_s)
+                })
+                .filter_map(|res| res)
+                .map(|x| *x)
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>()
+}
+
 fn generate_constraints(graph: &Graph, reads: Reads, raw_cycles: &Vec<Vec<u64>>) -> HashSet<(Vec<usize>, Vec<usize>)> {
     let node_to_cycle: HashMap<u64, Vec<usize>> = get_node_to_cycle_map(raw_cycles);
 
-    println!("nodes_to_cycles_map: {:?}", node_to_cycle);
-
     let mut constraints: HashSet<(Vec<usize>, Vec<usize>)> = HashSet::new();
 
-    for (start_node_id, middle_node_id, end_node_id, node_in_between)
-    in map_reads_to_node_id_pairs(reads, graph) {
-        let paths = graph.find_path(start_node_id, middle_node_id, end_node_id, node_in_between);
-        println!("{}", paths.len());
-        let cycles_on_path = paths.first()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .map(|(i, _)| {
-                paths.iter()
-                    .map(|path| {
-                        path.get(i).unwrap()
-                    })
-                    .filter(|node| {
-                        node_to_cycle.contains_key(node)
-                    })
-                    .flat_map(|node| {
-                        node_to_cycle.get(&node).unwrap()
-                    })
+    // for (start_node_id, middle_node_id, end_node_id, node_in_between)
+    // in map_reads_to_node_id_pairs(reads, graph) {
+    //     let paths = graph.find_path(start_node_id, middle_node_id, end_node_id, node_in_between);
+    //     println!("{}", paths.len());
+    //     let cycles_on_path = paths.first()
+    //         .unwrap()
+    //         .iter()
+    //         .enumerate()
+    //         .map(|(i, _)| {
+    //             paths.iter()
+    //                 .map(|path| {
+    //                     path.get(i).unwrap()
+    //                 })
+    //                 .filter(|node| {
+    //                     node_to_cycle.contains_key(node)
+    //                 })
+    //                 .flat_map(|node| {
+    //                     node_to_cycle.get(&node).unwrap()
+    //                 })
+    //                 .map(|x| *x)
+    //                 .collect::<HashSet<usize>>()
+    //                 .into_iter()
+    //                 .collect::<Vec<usize>>()
+    //         })
+    //         .collect::<Vec<Vec<usize>>>();
+    for path in get_reads_path(graph, &reads).into_iter() {
+        let cycles_on_path = path.into_iter()
+            .filter(|node_id| {
+                node_to_cycle.contains_key(node_id)
+            })
+            .map(|node_id| {
+                node_to_cycle.get(&node_id).unwrap()
+                    .into_iter()
                     .map(|x| *x)
                     .collect::<HashSet<usize>>()
                     .into_iter()
                     .collect::<Vec<usize>>()
             })
+            .collect::<HashSet<Vec<usize>>>()
+            .into_iter()
             .collect::<Vec<Vec<usize>>>();
     
         // get every combination and store the constraint in hashset
@@ -270,6 +320,62 @@ fn get_amount_of_violated_contraints(
         .count()
 }
 
+fn sort_topologically(
+    amount_of_cycles: usize,
+    constraints: &HashSet<(Vec<usize>, Vec<usize>)>
+) -> Vec<Vec<usize>> {
+    let nodes: Vec<usize> = (0..amount_of_cycles).into_iter().collect();
+    let mut edges: HashMap<Vec<usize>, HashSet<Vec<usize>>> = HashMap::new();
+    let mut reverse_edges: HashMap<Vec<usize>, HashSet<Vec<usize>>> = HashMap::new();
+
+    // Create edges with or-nodes
+    constraints.into_iter()
+        .for_each(|(left, right)| {
+            if edges.contains_key(left) {
+                edges.get_mut(left).unwrap().insert(right.to_vec());
+            } else {
+                edges.insert(left.to_vec(), HashSet::from([right.to_vec()]));
+            }
+            if reverse_edges.contains_key(right) {
+                reverse_edges.get_mut(right).unwrap().insert(left.to_vec());
+            } else {
+                reverse_edges.insert(right.to_vec(), HashSet::from([left.to_vec()]));
+            }
+        });
+
+    // add edges from or-nodes
+    edges.clone().into_iter()
+        .filter(|(left, _)| left.len() > 1)
+        .flat_map(|(or_node, _)| {
+            or_node.clone().into_iter()
+                .map(move |partial_or_nodes| {
+                    (or_node.clone(), partial_or_nodes.clone())
+                })
+        })
+        .for_each(|(or_node, partial_or_nodes)| {
+            if edges.contains_key(&or_node) {
+                edges.get_mut(&or_node).unwrap().insert(vec![partial_or_nodes]);
+            } else {
+                edges.insert(or_node.to_vec(), HashSet::from([vec![partial_or_nodes]]));
+            }
+            if reverse_edges.contains_key(&vec![partial_or_nodes]) {
+                reverse_edges.get_mut(&vec![partial_or_nodes]).unwrap().insert(or_node);
+            } else {
+                reverse_edges.insert(vec![partial_or_nodes].to_vec(), HashSet::from([or_node]));
+            }
+        });
+    
+    let amount_of_start_nodes: usize = nodes.into_iter()
+        .filter(|node| {
+            !reverse_edges.contains_key(&vec![*node]) || reverse_edges.get(&vec![*node]).unwrap().len() == 0
+        })
+        .count();
+
+    println!("{} start nodes were found for the topological graph: {:?}", amount_of_start_nodes, edges);
+
+    vec![]
+}
+
 // Almost good enough
 // Remember having all cycles in the path is another constraint
 // so check the filters, so that they value unique nodes (not in the primitive constraints) as extra
@@ -283,29 +389,37 @@ pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bo
     filter_loose_constraints(&mut constraints);
     filter_transitively_satisfied_constraints(&mut constraints);
 
-    let mut rng = rand::rng();
-    let mut cycle_indices: Vec<usize> = (0..raw_cycles.len()).collect();
-    let mut satisfying_permutations = 0;
-    let mut first_working_permutation: Option<Vec<usize>> = None;
-    let sample_size = 1000;
+    // perform a topological sort while trying to detect cycles
+    // If there are cycles, remove as little constraints as possible such that no cycles appear
+    //  AND have the graph split, turning the output into multiple sequences
+    let amount_of_cycles = raw_cycles.len();
+    let cycle_order = sort_topologically(amount_of_cycles, &constraints);
+
+    // Reconstruct actual sequence from the cycle order
+
+    // let mut rng = rand::rng();
+    // let mut cycle_indices: Vec<usize> = (0..raw_cycles.len()).collect();
+    // let mut satisfying_permutations = 0;
+    // let mut first_working_permutation: Option<Vec<usize>> = None;
+    // let sample_size = 1000;
     
-    for _ in 0..sample_size {
-        cycle_indices.shuffle(&mut rng);
+    // for _ in 0..sample_size {
+    //     cycle_indices.shuffle(&mut rng);
         
-        if get_amount_of_violated_contraints(cycle_indices.clone(), &constraints) == 0 {
-            satisfying_permutations += 1;
-            if first_working_permutation.is_none() {
-                first_working_permutation = Some(cycle_indices.clone());
-            }
-        }
-    }
+    //     if get_amount_of_violated_contraints(cycle_indices.clone(), &constraints) == 0 {
+    //         satisfying_permutations += 1;
+    //         if first_working_permutation.is_none() {
+    //             first_working_permutation = Some(cycle_indices.clone());
+    //         }
+    //     }
+    // }
     
-    if let Some(first_permutation) = first_working_permutation {
-        println!("First working permutation found: {:?}", first_permutation);
-        println!("Satisfying permutations: {}/{} samples", satisfying_permutations, sample_size);
-    } else {
-        println!("No satisfying permutation found in {} samples", sample_size);
-    }
+    // if let Some(first_permutation) = first_working_permutation {
+    //     println!("First working permutation found: {:?}", first_permutation);
+    //     println!("Satisfying permutations: {}/{} samples", satisfying_permutations, sample_size);
+    // } else {
+    //     println!("No satisfying permutation found in {} samples", sample_size);
+    // }
 
     display_constraints(&constraints);
 
