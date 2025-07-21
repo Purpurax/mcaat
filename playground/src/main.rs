@@ -8,7 +8,6 @@ pub mod assembly;
 pub mod cycle;
 pub mod graph;
 pub mod reads;
-pub mod test;
 
 /// Program which basically filters out only relevant data for CRISPR array ordering
 #[derive(Parser, Debug)]
