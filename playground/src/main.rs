@@ -66,7 +66,7 @@ fn main() {
     
     for (i, (subgraph, reads, cycles)) in problem_cases.enumerate() {
         let crispr_sequence: String = assembly::assembly(subgraph, reads.clone(), cycles, args.output);
-        println!("Used reads: {:?}", reads);
+        // println!("Used reads: {:?}", reads);
         println!("{}: {}", i, crispr_sequence);
     }
     

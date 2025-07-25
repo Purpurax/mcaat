@@ -2,7 +2,10 @@ use std::collections::HashSet;
 use std::{collections::HashMap, fs::File, io};
 use std::io::Write;
 
+use crate::reads::Reads;
 
+
+#[derive(Clone)]
 pub struct Graph {
     pub nodes: HashMap<u64, String>,
     pub edges: HashMap<u64, Vec<u64>>,
@@ -14,6 +17,61 @@ impl Graph {
         Graph {
             nodes: HashMap::new(),
             edges: HashMap::new(),
+            crispr_nodes: HashSet::new()
+        }
+    }
+
+    pub fn from_reads(reads: Reads) -> Graph {
+        let nodes = reads.reads.clone().into_iter()
+            .flat_map(|read| {
+                (23..read.sequence.chars().count())
+                    .map(move |index| {
+                        read.sequence.chars()
+                            .skip(index - 23)
+                            .take(23)
+                            .collect::<String>()
+                    })
+            })
+            .collect::<HashSet<String>>()
+            .into_iter()
+            .enumerate()
+            .map(|(i, seq)| (i as u64, seq))
+            .collect::<HashMap<u64, String>>();
+        let reverse_nodes = nodes.clone().into_iter()
+            .map(|(i, seq)| (seq, i))
+            .collect::<HashMap<String, u64>>();
+
+        let mut edges: HashMap<u64, Vec<u64>> = HashMap::new();
+        for read in reads.reads {
+            let path = (23..read.sequence.chars().count())
+                .map(|index| {
+                    read.sequence.chars()
+                        .skip(index - 23)
+                        .take(23)
+                        .collect::<String>()
+                })
+                .map(|seq| {
+                    *reverse_nodes.get(&seq).unwrap_or(&0)
+                })
+                .collect::<Vec<u64>>();
+            for index in 0..path.len() - 2 {
+                let source = path.get(index).unwrap();
+                let destination = path.get(index + 1).unwrap();
+
+                let map_opt = edges.get_mut(source);
+                if let Some(destinations) = map_opt {
+                    if !destinations.contains(destination) {
+                        destinations.push(*destination);
+                    }
+                } else {
+                    edges.insert(*source, vec![*destination]);
+                }
+            }
+        }
+
+        Graph {
+            nodes,
+            edges,
             crispr_nodes: HashSet::new()
         }
     }

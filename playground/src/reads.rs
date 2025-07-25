@@ -74,8 +74,8 @@ impl Reads {
         let mut relevant_reads = Reads::new();
         for read in self.reads.clone().into_iter() {
             if unique_nodes_with_seqs.contains(&read.start_k_mer)
-            && unique_nodes_with_seqs.contains(&read.middle_k_mer)
-            && unique_nodes_with_seqs.contains(&read.end_k_mer) {
+            || unique_nodes_with_seqs.contains(&read.middle_k_mer)
+            || unique_nodes_with_seqs.contains(&read.end_k_mer) {
                 relevant_reads.reads.push(read);
             }
         }
