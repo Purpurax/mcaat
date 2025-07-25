@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::{HashMap, HashSet}, fs::File, io};
+use std::{collections::{HashMap, HashSet}, fs::File, io};
 use std::io::Write;
 
 use crate::{graph::Graph, reads::Reads};
@@ -18,7 +18,7 @@ fn get_node_to_cycle_map(raw_cycles: &Vec<Vec<u64>>) -> HashMap<u64, usize> {
         .collect::<HashSet<u64>>();
 
     // let cycle_indices = set_cover_solver(sets, total_set);
-    let cycle_indices = set_cover_brute_force(sets, total_set);
+    let cycle_indices = set_cover_brute_force(sets.clone(), total_set.clone());
 
     raw_cycles.clone()
         .into_iter()
@@ -26,67 +26,34 @@ fn get_node_to_cycle_map(raw_cycles: &Vec<Vec<u64>>) -> HashMap<u64, usize> {
         .filter(|(cycle_index, _cycle)| cycle_indices.contains(cycle_index))
         .flat_map(|(cycle_index, cycle)| {
             cycle.into_iter()
+                .filter({
+                    let value = sets.clone();
+                    let cycle_indices_copy = cycle_indices.clone();
+                    move |node_id| {
+                        value.clone().into_iter()
+                            .enumerate()
+                            .filter(|(set_index, _set)| cycle_indices_copy.contains(set_index))
+                            .filter(|(set_index, _set)| *set_index != cycle_index)
+                            .all(|(_, set)| !set.contains(&node_id))
+                    }
+                })
                 .map(move |node_id| {
                     (node_id, cycle_index)
                 })
         })
         .collect::<HashMap<u64, usize>>()
 
-    // let mut unique_cycles = get_cycles_with_unique_nodes(raw_cycles);
-
-    // let total_nodes_in_cycles = raw_cycles.clone()
-    //     .into_iter()
-    //     .flatten()
-    //     .collect::<HashSet<u64>>();
-
-    // let mut used_cycles = unique_cycles.clone().into_iter()
-    //     .map(|(_node_id, cycle_index)| cycle_index)
-    //     .collect::<HashSet<usize>>();
-    // let mut covered_nodes = raw_cycles.clone()
+    // raw_cycles.clone()
     //     .into_iter()
     //     .enumerate()
+    //     .filter(|(cycle_index, _cycle)| cycle_indices.contains(cycle_index))
     //     .flat_map(|(cycle_index, cycle)| {
     //         cycle.into_iter()
     //             .map(move |node_id| {
-    //                 (cycle_index, node_id)
+    //                 (node_id, cycle_index)
     //             })
     //     })
-    //     .filter(|(cycle_index, _node_id)| !used_cycles.contains(cycle_index))
-    //     .map(|(_cycle_index, node_id)| node_id)
-    //     .collect::<HashSet<u64>>();
-    // while covered_nodes.len() < total_nodes_in_cycles.len() {
-    //     println!("{:?} -- {:?}\n WITH {:?}", used_cycles, covered_nodes.len(), total_nodes_in_cycles.len());
-    //     let (next_greedy_cycle_index, newly_covered_nodes) = raw_cycles.clone()
-    //         .into_iter()
-    //         .enumerate()
-    //         .filter(|(index, _cycle)| !used_cycles.contains(index))
-    //         .map(|(index, cycle)| {
-    //             let newly_covered_nodes = cycle.into_iter()
-    //                 .filter(|node_id| {
-    //                     !covered_nodes.contains(node_id)
-    //                 })
-    //                 .collect::<HashSet<u64>>();
-    //             (index, newly_covered_nodes)
-    //         })
-    //         .max_by(|(_, newly_covered_node_a), (_, newly_covered_node_b)| {
-    //             newly_covered_node_a.len().cmp(&newly_covered_node_b.len())
-    //         })
-    //         .unwrap();
-    //     used_cycles.insert(next_greedy_cycle_index);
-
-    //     newly_covered_nodes.into_iter().for_each(|node_id| {
-    //         covered_nodes.insert(node_id);        
-    //     });
-
-    //     raw_cycles.get(next_greedy_cycle_index).unwrap()
-    //         .into_iter()
-    //         .for_each(|node_id| {
-    //             unique_cycles.insert(*node_id, next_greedy_cycle_index);
-    //         });
-    // }
-    
-
-    // unique_cycles
+    //     .collect::<HashMap<u64, usize>>()
 }
 
 fn set_cover_solver(
@@ -265,6 +232,12 @@ fn generate_constraints(graph: &Graph, reads: Reads, node_to_cycle: HashMap<u64,
             })
             .collect::<Vec<usize>>();
         
+        if cycles_on_path.len() == 0 {
+            println!("The read goes through no cycle specific node");
+        } else if cycles_on_path.len() == 1 {
+            println!("The read is visiting only one cycle specific node: {}", cycles_on_path.first().unwrap());
+        }
+        
         cycles_on_path.clone()
             .into_iter()
             .enumerate()
@@ -278,11 +251,15 @@ fn generate_constraints(graph: &Graph, reads: Reads, node_to_cycle: HashMap<u64,
                     })
             });
     }
-    
+
     constraints
 }
 
-fn sort_topologically(constraints: &Vec<(usize, usize)>) -> (f64, Vec<usize>) {
+fn extend_constraints_by_transitive(constraints: &mut Vec<(usize, usize)>) {
+    
+}
+
+fn sort_topologically(constraints: &Vec<(usize, usize)>) -> Vec<Vec<usize>> {
     let mut edges: HashMap<(usize, usize), usize> = HashMap::new();
 
     constraints.into_iter()
@@ -302,15 +279,22 @@ fn sort_topologically(constraints: &Vec<(usize, usize)>) -> (f64, Vec<usize>) {
         .into_iter()
         .collect::<Vec<usize>>();
 
+    println!("Nodes: {:?}", nodes);
     println!("Edges: {:?}", edges);
     resolve_cycles(&mut edges);
 
-    let mut confidence: f64 = 1.0;
-    let mut cycle_order: Vec<usize> = vec![];
+    let possible_start_nodes = nodes.clone()
+        .into_iter()
+        .filter(|node| {
+            nodes.iter()
+                .filter(|source_node| {
+                    edges.contains_key(&(**source_node, *node))
+                })
+                .count() == 0
+        })
+        .collect::<Vec<usize>>();
 
-    apply_topological_sort(&nodes, &mut edges, &mut cycle_order, &mut confidence);
-
-    (confidence, cycle_order)
+    apply_topological_sort(possible_start_nodes, &nodes, edges)
 }
 
 fn resolve_cycles(edges_with_weights: &mut HashMap<(usize, usize), usize>) {
@@ -393,90 +377,126 @@ fn dfs_cycles(
 }
 
 fn apply_topological_sort(
+    possible_start_nodes: Vec<usize>,
     nodes: &Vec<usize>,
-    edges: &mut HashMap<(usize, usize), usize>,
-    resulting_order: &mut Vec<usize>,
-    resulting_confidence: &mut f64
-) {
-    if edges.keys().len() == 0 {
-        let missing_nodes = nodes.clone()
-            .into_iter()
-            .filter(|node| {
-                !resulting_order.contains(&node)
-            })
-            .collect::<Vec<usize>>();
-
-        for missing_node in missing_nodes {
-            let possible_spots = nodes.len() - resulting_order.len();
-
-            *resulting_confidence *= 1.0 / possible_spots as f64;
-            resulting_order.push(missing_node);
-        }
-
-        return
+    edges: HashMap<(usize, usize), usize>
+) -> Vec<Vec<usize>> {
+    if possible_start_nodes.len() == 0 {
+        return vec![vec![]]
     }
-    
-    let possible_start_nodes = edges.clone()
-        .into_iter()
-        .flat_map(|((source, destination), _)| {
-            vec![source, destination]
-        })
-        .filter(|node| {
-            nodes.iter()
-                .filter(|source_node| {
-                    edges.contains_key(&(**source_node, *node))
+
+    possible_start_nodes.clone().into_iter()
+        .flat_map(|start_node| {
+            let new_possible_start_nodes = possible_start_nodes.clone()
+                .into_iter()
+                .filter(|node| *node != start_node)
+                .chain(
+                    edges.clone().into_iter()
+                        .filter(|((source, _), _)| {
+                            *source == start_node
+                        })
+                        .map(|((_, destination), _)| destination)
+                )
+                .collect::<Vec<usize>>();
+            let new_edges = edges.clone()
+                .into_iter()
+                .filter(|((source, destination), _)| {
+                    *source != start_node
+                    && start_node != *destination
                 })
-                .count() == 0
+                .collect::<HashMap<(usize, usize), usize>>();
+            
+            apply_topological_sort(new_possible_start_nodes, nodes, new_edges)
+                .into_iter()
+                .map(|possible_order| {
+                    let mut new_order = vec![start_node];
+                    new_order.extend(possible_order);
+                    new_order
+                })
+                .collect::<Vec<Vec<usize>>>()
         })
-        .collect::<Vec<usize>>();
+        .collect::<Vec<Vec<usize>>>()
 
-    let node_to_relevancy_map = possible_start_nodes
-        .clone()
-        .into_iter()
-        .map(|node| {
-            let mut summed_node_relevancy: usize = 0;
-            nodes.iter()
-                .for_each(|other_node| {
-                    if let Some(weight) = edges.get(&(node, *other_node)) {
-                        summed_node_relevancy += *weight;
-                    }
-                    if let Some(weight) = edges.get(&(*other_node, node)) {
-                        summed_node_relevancy += *weight;
-                    }
-                });
-            (node, summed_node_relevancy)
-        })
-        .collect::<HashMap<usize, usize>>();
-    let next_node = possible_start_nodes
-        .clone()
-        .into_iter()
-        .max_by(|node_a, node_b| {
-            let relevancy_a = node_to_relevancy_map.get(node_a).unwrap();
-            let relevancy_b = node_to_relevancy_map.get(node_b).unwrap();
-            relevancy_a.cmp(relevancy_b)
-        })
-        .unwrap();
+
+    // if edges.keys().len() == 0 {
+    //     let missing_nodes = nodes.clone()
+    //         .into_iter()
+    //         .filter(|node| {
+    //             !resulting_order.contains(&node)
+    //         })
+    //         .collect::<Vec<usize>>();
+
+    //     for missing_node in missing_nodes {
+    //         let possible_spots = nodes.len() - resulting_order.len();
+
+    //         *resulting_confidence *= 1.0 / possible_spots as f64;
+    //         resulting_order.push(missing_node);
+    //     }
+
+    //     return
+    // }
     
-    let total_relevancy = possible_start_nodes
-        .into_iter()
-        .map(|node| {
-            node_to_relevancy_map.get(&node).unwrap()
-        })
-        .sum::<usize>();
-    let next_node_relevancy = *node_to_relevancy_map.get(&next_node).unwrap();
+    // let possible_start_nodes = edges.clone()
+    //     .into_iter()
+    //     .flat_map(|((source, destination), _)| {
+    //         vec![source, destination]
+    //     })
+    //     .filter(|node| {
+    //         nodes.iter()
+    //             .filter(|source_node| {
+    //                 edges.contains_key(&(**source_node, *node))
+    //             })
+    //             .count() == 0
+    //     })
+    //     .collect::<Vec<usize>>();
 
-    resulting_order.push(next_node);
-    *resulting_confidence *= next_node_relevancy as f64 / total_relevancy as f64;
+    // let node_to_relevancy_map = possible_start_nodes
+    //     .clone()
+    //     .into_iter()
+    //     .map(|node| {
+    //         let mut summed_node_relevancy: usize = 0;
+    //         nodes.iter()
+    //             .for_each(|other_node| {
+    //                 if let Some(weight) = edges.get(&(node, *other_node)) {
+    //                     summed_node_relevancy += *weight;
+    //                 }
+    //                 if let Some(weight) = edges.get(&(*other_node, node)) {
+    //                     summed_node_relevancy += *weight;
+    //                 }
+    //             });
+    //         (node, summed_node_relevancy)
+    //     })
+    //     .collect::<HashMap<usize, usize>>();
+    // let next_node = possible_start_nodes
+    //     .clone()
+    //     .into_iter()
+    //     .max_by(|node_a, node_b| {
+    //         let relevancy_a = node_to_relevancy_map.get(node_a).unwrap();
+    //         let relevancy_b = node_to_relevancy_map.get(node_b).unwrap();
+    //         relevancy_a.cmp(relevancy_b)
+    //     })
+    //     .unwrap();
+    
+    // let total_relevancy = possible_start_nodes
+    //     .into_iter()
+    //     .map(|node| {
+    //         node_to_relevancy_map.get(&node).unwrap()
+    //     })
+    //     .sum::<usize>();
+    // let next_node_relevancy = *node_to_relevancy_map.get(&next_node).unwrap();
 
-    *edges = edges.clone()
-        .into_iter()
-        .filter(|((source, destination), _)| {
-            *source != next_node
-            && *source != *destination
-        })
-        .collect::<HashMap<(usize, usize), usize>>();
+    // resulting_order.push(next_node);
+    // *resulting_confidence *= next_node_relevancy as f64 / total_relevancy as f64;
 
-    apply_topological_sort(nodes, edges, resulting_order, resulting_confidence);
+    // *edges = edges.clone()
+    //     .into_iter()
+    //     .filter(|((source, destination), _)| {
+    //         *source != next_node
+    //         && *next_node != *destination
+    //     })
+    //     .collect::<HashMap<(usize, usize), usize>>();
+
+    // apply_topological_sort(nodes, edges, resulting_order, resulting_confidence);
 }
 
 fn cycle_order_to_node_order(cycle_order: &Vec<usize>, raw_cycles: &Vec<Vec<u64>>) -> Vec<u64> {
@@ -514,15 +534,32 @@ pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bo
             .collect::<HashSet<usize>>(),
         raw_cycles.len());
     let constraints = generate_constraints(&graph, reads, node_to_cycle);
-    let (confidence, cycle_order) = sort_topologically(&constraints);
-    let node_order = cycle_order_to_node_order(&cycle_order, &raw_cycles);
-    println!("raw_cycles_length: {}, node_order: {}",
-        raw_cycles.clone().into_iter().flatten().collect::<HashSet<u64>>().len(),
-        node_order.clone().into_iter().collect::<HashSet<u64>>().len()    
-    );
-    let sequence = get_sequence_from_node_order(&graph, &node_order);
+    let all_cycle_orders = sort_topologically(&constraints);
+    let overall_confidence: f64 = 1.0 / all_cycle_orders.len() as f64;
 
-    println!("TopoSort with confidence {:.2}% and order of {:?}", confidence * 100.0, cycle_order);
+    let sequences = all_cycle_orders.clone().into_iter()
+        .map(|cycle_order| {
+            let node_order = cycle_order_to_node_order(&cycle_order, &raw_cycles);
+            let sequence = get_sequence_from_node_order(&graph, &node_order);
+            sequence
+        })
+        .collect::<Vec<String>>();
+    let exact_sequence = sequences.first().unwrap()
+        .chars()
+        .enumerate()
+        .map(|(index, character)| {
+            if sequences.iter()
+                .map(|sequence| sequence.chars().nth(index).unwrap())
+                .all(|other_character| other_character == character)
+            {
+                character
+            } else {
+                'N'
+            }
+        })
+        .collect::<String>();
+
+    println!("TopoSort with confidence {:.2}% and order of {:?}", overall_confidence * 100.0, all_cycle_orders.first().unwrap());
     
-    sequence
+    exact_sequence
 }
