@@ -1,8 +1,7 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io};
+use std::{cmp::Ordering, collections::{HashMap, HashSet}, fs::File, io};
 use std::io::Write;
 
 use crate::{graph::Graph, reads::Reads};
-use rand::seq::SliceRandom;
 use itertools::Itertools;
 
 // Set cover problem:
@@ -42,18 +41,6 @@ fn get_node_to_cycle_map(raw_cycles: &Vec<Vec<u64>>) -> HashMap<u64, usize> {
                 })
         })
         .collect::<HashMap<u64, usize>>()
-
-    // raw_cycles.clone()
-    //     .into_iter()
-    //     .enumerate()
-    //     .filter(|(cycle_index, _cycle)| cycle_indices.contains(cycle_index))
-    //     .flat_map(|(cycle_index, cycle)| {
-    //         cycle.into_iter()
-    //             .map(move |node_id| {
-    //                 (node_id, cycle_index)
-    //             })
-    //     })
-    //     .collect::<HashMap<u64, usize>>()
 }
 
 fn set_cover_solver(
@@ -120,36 +107,6 @@ fn set_cover_brute_force(
     }
 
     return vec![]
-}
-
-fn get_cycles_with_unique_nodes(raw_cycles: &Vec<Vec<u64>>) -> HashMap<u64, usize> {
-    raw_cycles.iter() 
-        .enumerate()
-        .map(|(i, raw_cycle)| {
-            let cycle_specific_nodes = raw_cycle.iter()
-                .map(|node_id| *node_id)
-                .filter(|node_id| {
-                    raw_cycles.iter()
-                        .enumerate()
-                        .filter(|(j, _)| i != *j)
-                        .all(|(_, other_cycle)| {
-                            other_cycle.iter()
-                                .all(|other_node_id| {
-                                    node_id != other_node_id
-                                })
-                        })
-                })
-                .collect::<Vec<u64>>();
-            (i, cycle_specific_nodes)
-        })
-        .filter(|(_, cycle_specific_nodes)| cycle_specific_nodes.len() > 0)
-        .flat_map(|(i, cycle_specific_nodes)| {
-            cycle_specific_nodes.into_iter()
-                .map(move |node_id| {
-                    (node_id, i)
-                })
-        })
-        .collect::<HashMap<u64, usize>>()
 }
 
 fn map_reads_to_node_id_pairs(reads: Reads, graph: &Graph) -> Vec<(u64, u64, u64, usize)> {
@@ -231,13 +188,7 @@ fn generate_constraints(graph: &Graph, reads: Reads, node_to_cycle: HashMap<u64,
                 *node_to_cycle.get(&node_id).unwrap()
             })
             .collect::<Vec<usize>>();
-        
-        if cycles_on_path.len() == 0 {
-            println!("The read goes through no cycle specific node");
-        } else if cycles_on_path.len() == 1 {
-            println!("The read is visiting only one cycle specific node: {}", cycles_on_path.first().unwrap());
-        }
-        
+
         cycles_on_path.clone()
             .into_iter()
             .enumerate()
@@ -255,11 +206,7 @@ fn generate_constraints(graph: &Graph, reads: Reads, node_to_cycle: HashMap<u64,
     constraints
 }
 
-fn extend_constraints_by_transitive(constraints: &mut Vec<(usize, usize)>) {
-    
-}
-
-fn sort_topologically(constraints: &Vec<(usize, usize)>) -> Vec<Vec<usize>> {
+fn sort_topologically(constraints: &Vec<(usize, usize)>, debug: bool) -> Vec<Vec<usize>> {
     let mut edges: HashMap<(usize, usize), usize> = HashMap::new();
 
     constraints.into_iter()
@@ -279,8 +226,10 @@ fn sort_topologically(constraints: &Vec<(usize, usize)>) -> Vec<Vec<usize>> {
         .into_iter()
         .collect::<Vec<usize>>();
 
-    println!("Nodes: {:?}", nodes);
-    println!("Edges: {:?}", edges);
+    if debug {
+        println!("Nodes: {:?}", nodes);
+        println!("Edges: {:?}", edges);
+    }
     resolve_cycles(&mut edges);
 
     let possible_start_nodes = nodes.clone()
@@ -297,20 +246,75 @@ fn sort_topologically(constraints: &Vec<(usize, usize)>) -> Vec<Vec<usize>> {
     apply_topological_sort(possible_start_nodes, &nodes, edges)
 }
 
+// Cycles are resolved by:
+// 1. Find every cycle
+// 2. Sort the edges by the multiplication of:
+//   - The amount of occurrences in the cycles
+//   - The relative weight amount of the edge (weight / total_weight)
+// 3. Take out the edge with the lowest value
 fn resolve_cycles(edges_with_weights: &mut HashMap<(usize, usize), usize>) {
     let mut cycles = cycle_finder(&edges_with_weights);
 
     while cycles.len() > 0 {
-        let mut edges_sorted = edges_with_weights.clone().into_iter()
-            .collect::<Vec<((usize, usize), usize)>>();
-        edges_sorted.sort_by(|((_, _), weight_a), ((_, _), weight_b)| {
-            weight_a.cmp(weight_b)
-        });
+        let mut sorted_edges = resolve_cycles_sort_edges(cycles, edges_with_weights);
 
-        let removed_edge = edges_sorted.remove(0);
+        let removed_edge = sorted_edges.remove(0);
+        println!("Removed the edge in resolve_cycles: {:?}", removed_edge);
         edges_with_weights.remove(&(removed_edge.0.0, removed_edge.0.1));
         cycles = cycle_finder(&edges_with_weights);
     }
+}
+
+fn resolve_cycles_sort_edges(
+    cycles: Vec<Vec<usize>>,
+    edges: &HashMap<(usize, usize), usize>
+) -> Vec<((usize, usize), f64)> {
+    let mut edges_in_cycles_with_count: HashMap<(usize, usize), u8> = HashMap::new();
+    let edges_in_cycles = cycles.into_iter()
+        .map(|cycle| {
+            let cycle_start = *cycle.first().unwrap();
+
+            let mut complete_cycle = cycle;
+            complete_cycle.push(cycle_start);
+            complete_cycle
+
+        })
+        .flat_map(|cycle| {
+            cycle.into_iter()
+                .tuple_windows::<(usize, usize)>()
+                .filter(|(node_a, node_b)| {
+                    edges.contains_key(&(*node_a, *node_b))
+                })
+        });
+
+    edges_in_cycles.for_each(|(node_a, node_b)| {
+            let edge_opt = edges_in_cycles_with_count.get_mut(&(node_a, node_b));
+            if let Some(edge) = edge_opt {
+                *edge += 1;
+            } else {
+                edges_in_cycles_with_count.insert((node_a, node_b), 1);
+            }
+        });
+
+    let total_weights = edges.iter()
+        .map(|(_, weight)| *weight as f64)
+        .sum::<f64>();
+
+    let mut edges_with_relevancy = edges_in_cycles_with_count.into_iter()
+        .into_iter()
+        .map(|((node_a, node_b), edge_occ_count)| {
+            let weight = *edges.get(&(node_a, node_b)).unwrap();
+
+            let relevancy = (edge_occ_count as f64 * weight as f64) / total_weights;
+
+            ((node_a, node_b), relevancy)
+        })
+        .collect::<Vec<((usize, usize), f64)>>();
+    edges_with_relevancy.sort_by(|(_, rel_a), (_, rel_b)| {
+        rel_a.partial_cmp(rel_b).unwrap_or(Ordering::Equal)
+    });
+
+    edges_with_relevancy
 }
 
 fn cycle_finder(edges_with_weights: &HashMap<(usize, usize), usize>) -> Vec<Vec<usize>> {
@@ -416,87 +420,6 @@ fn apply_topological_sort(
                 .collect::<Vec<Vec<usize>>>()
         })
         .collect::<Vec<Vec<usize>>>()
-
-
-    // if edges.keys().len() == 0 {
-    //     let missing_nodes = nodes.clone()
-    //         .into_iter()
-    //         .filter(|node| {
-    //             !resulting_order.contains(&node)
-    //         })
-    //         .collect::<Vec<usize>>();
-
-    //     for missing_node in missing_nodes {
-    //         let possible_spots = nodes.len() - resulting_order.len();
-
-    //         *resulting_confidence *= 1.0 / possible_spots as f64;
-    //         resulting_order.push(missing_node);
-    //     }
-
-    //     return
-    // }
-    
-    // let possible_start_nodes = edges.clone()
-    //     .into_iter()
-    //     .flat_map(|((source, destination), _)| {
-    //         vec![source, destination]
-    //     })
-    //     .filter(|node| {
-    //         nodes.iter()
-    //             .filter(|source_node| {
-    //                 edges.contains_key(&(**source_node, *node))
-    //             })
-    //             .count() == 0
-    //     })
-    //     .collect::<Vec<usize>>();
-
-    // let node_to_relevancy_map = possible_start_nodes
-    //     .clone()
-    //     .into_iter()
-    //     .map(|node| {
-    //         let mut summed_node_relevancy: usize = 0;
-    //         nodes.iter()
-    //             .for_each(|other_node| {
-    //                 if let Some(weight) = edges.get(&(node, *other_node)) {
-    //                     summed_node_relevancy += *weight;
-    //                 }
-    //                 if let Some(weight) = edges.get(&(*other_node, node)) {
-    //                     summed_node_relevancy += *weight;
-    //                 }
-    //             });
-    //         (node, summed_node_relevancy)
-    //     })
-    //     .collect::<HashMap<usize, usize>>();
-    // let next_node = possible_start_nodes
-    //     .clone()
-    //     .into_iter()
-    //     .max_by(|node_a, node_b| {
-    //         let relevancy_a = node_to_relevancy_map.get(node_a).unwrap();
-    //         let relevancy_b = node_to_relevancy_map.get(node_b).unwrap();
-    //         relevancy_a.cmp(relevancy_b)
-    //     })
-    //     .unwrap();
-    
-    // let total_relevancy = possible_start_nodes
-    //     .into_iter()
-    //     .map(|node| {
-    //         node_to_relevancy_map.get(&node).unwrap()
-    //     })
-    //     .sum::<usize>();
-    // let next_node_relevancy = *node_to_relevancy_map.get(&next_node).unwrap();
-
-    // resulting_order.push(next_node);
-    // *resulting_confidence *= next_node_relevancy as f64 / total_relevancy as f64;
-
-    // *edges = edges.clone()
-    //     .into_iter()
-    //     .filter(|((source, destination), _)| {
-    //         *source != next_node
-    //         && *next_node != *destination
-    //     })
-    //     .collect::<HashMap<(usize, usize), usize>>();
-
-    // apply_topological_sort(nodes, edges, resulting_order, resulting_confidence);
 }
 
 fn cycle_order_to_node_order(cycle_order: &Vec<usize>, raw_cycles: &Vec<Vec<u64>>) -> Vec<u64> {
@@ -520,12 +443,6 @@ fn get_sequence_from_node_order(graph: &Graph, node_order: &Vec<u64>) -> String 
     sequence
 }
 
-// Almost good enough
-// Remember having all cycles in the path is another constraint
-// so check the filters, so that they value unique nodes (not in the primitive constraints) as extra
-// BEFORE doing anything, implement a function that performs a constraint check on a possible path
-// using this path, you can test the solution 5, 7, 2, 1, 0, 4, 8, 6, 3 (which is valid under the fully reduced constraints)
-// IF it is valid and the reductions all are valid, the paths can be considered correct and additional heuristical or other approaches are required to get the perfect path
 pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bool) -> String {
     let node_to_cycle: HashMap<u64, usize> = get_node_to_cycle_map(&raw_cycles);
     println!("Kept cycles: {:?} with a total of {} cycles",
@@ -534,7 +451,7 @@ pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bo
             .collect::<HashSet<usize>>(),
         raw_cycles.len());
     let constraints = generate_constraints(&graph, reads, node_to_cycle);
-    let all_cycle_orders = sort_topologically(&constraints);
+    let all_cycle_orders = sort_topologically(&constraints, debug);
     let overall_confidence: f64 = 1.0 / all_cycle_orders.len() as f64;
 
     let sequences = all_cycle_orders.clone().into_iter()
@@ -559,7 +476,9 @@ pub fn assembly(graph: Graph, reads: Reads, raw_cycles: Vec<Vec<u64>>, debug: bo
         })
         .collect::<String>();
 
-    println!("TopoSort with confidence {:.2}% and order of {:?}", overall_confidence * 100.0, all_cycle_orders.first().unwrap());
+    if debug {
+        println!("TopoSort has a confidence of {:.2}% for the order {:?}", overall_confidence * 100.0, all_cycle_orders.first().unwrap());
+    }
     
     exact_sequence
 }
