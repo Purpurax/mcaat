@@ -1,12 +1,15 @@
+[submodule "libs/cft"]
+	path = libs/cft
+	url = https://github.com/c4v4/cft
+[submodule "libs/hwinfo"]
+	path = libs/hwinfo
+	url = https://github.com/lfreist/hwinfo
 [submodule "libs/megahit"]
 	path = libs/megahit
 	url = https://github.com/voutcn/megahit.git
 [submodule "libs/progressbar"]
 	path = libs/progressbar
 	url = https://github.com/gipert/progressbar/
-[submodule "libs/libs/rapidfuzz-cpp"]
-	path = libs/libs/rapidfuzz-cpp
-	url = https://github.com/rapidfuzz/rapidfuzz-cpp.git
 [submodule "libs/rapidfuzz-cpp"]
 	path = libs/rapidfuzz-cpp
 	url = https://github.com/rapidfuzz/rapidfuzz-cpp.git
