@@ -11,6 +11,7 @@
 #include <string.h>
 #include "settings.h"
 #include "filters.h"
+#include "cycle_filter.h"
 #include <cstring>
 #include "sdbg_build.h"
 #include "post_processing.h"
@@ -417,10 +418,9 @@ int main(int argc, char** argv) {
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
     Settings settings = parse_arguments(argc, argv);
-    string name_of_genome = "test";
     if (check_for_error(settings)){
-        //tell the user which folder we are deleting
-        cout<< "Folder " << settings.output_folder << " will be deleted due to errors." << endl;
+        cout << "Folder " << settings.output_folder;
+        cout << " will be deleted due to errors." << endl;
         
         cout << "Do you want that folder to be removed? (y/n): ";
         char answer;
@@ -439,47 +439,69 @@ int main(int argc, char** argv) {
     SDBGBuild sdbg_build(settings);
     // %% BUILD GRAPH %%
     
-   
-    int length_bound = 77;
-    SDBG sdbg;
-    string graph_folder_old = settings.graph_folder;
-    settings.graph_folder+="/graph";
-    char * cstr = new char [settings.graph_folder.length()+1];
-    std::strcpy (cstr, settings.graph_folder.c_str());
-    cout << "Graph folder: " << cstr << endl;
-    sdbg.LoadFromFile(cstr);
-    cout << "Loaded the graph" << endl;
-
     // %% LOAD GRAPH %%
-    
-    delete[] cstr;
+    const int length_bound = 77;
+    string graph_path = settings.graph_folder + "/graph";
+    cout << "Graph folder: " << graph_path << endl;
 
-    
+    SDBG sdbg;
+    sdbg.LoadFromFile(graph_path.c_str());
+    cout << "Loaded the graph" << endl;
+    // %% LOAD GRAPH %%
+
     // %% FBCE ALGORITHM %%
     cout << "FBCE START:" << endl;
-    auto start_time = chrono::high_resolution_clock::now();
     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
-    int number_of_spacers_total = 0;
-    auto cycles = cycle_finder.results;
-    cout << "Number of nodes in results: " << cycles.size() << endl;
+    auto cycles_map = cycle_finder.results;
+    cout << "Number of nodes in results: " << cycles_map.size() << endl;
     // %% FBCE ALGORITHM %%
     
+    // %% FILTER CYCLES %%
+    cout << "FILTER CYCLES START:" << endl;
+    int amount_of_cycles_before = get_cycle_count(cycles_map);
+    keep_relevant_cycles(cycles_map);
+    int amount_of_cycles_after = get_cycle_count(cycles_map);
+    cout << amount_of_cycles_before << " out of ";
+    cout << amount_of_cycles_after << " are omitted" << endl;
+    // %% FILTER CYCLES %%
+
+    // %% CREATE JUMPS (tmp) %%
+    // todo load in the reads again using the megahit library
+    // todo use the graph to create the jumps
+    // %% CREATE JUMPS (tmp) %%
+
+    // %% SPLIT INTO SUBPROBLEMS %%
+    // todo use the cycles to reduce the graph into subgraphs
+    // todo unload the full graph from storage
+    // todo copy over the reads which are relevant in the subgraphs
+    // => should return a vector of subgraph-jumps pair
+    // %% SPLIT INTO SUBPROBLEMS %%
+
+    // %% ORDER SPACERS %%
+    // todo for each subproblem use the assembly method from rust
+    // => should return all possible node order solutions
+    // todo compute the confidence value and take a random order solution
+    // %% ORDER SPACERS %%
+
+    // %% FILTERS %%
     int number_of_spacers = 0;
-    // %% FILTERS %%
     cout << "FILTERS START:" << endl;
-    Filters filters(sdbg, cycles);
-    auto  SYSTEMS = filters.ListArrays(number_of_spacers);
-    cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
+    // todo modify filters to take in cycle orders to return sequences
+    Filters filters(sdbg, cycles_map);
+    auto SYSTEMS = filters.ListArrays(number_of_spacers);
+    cout << "Number of spacers: " << number_of_spacers;
+    cout << " before cleaning" << endl;
     // %% FILTERS %%
-    //%% POST PROCESSING %%
+
+    // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
     CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
-    //%% POST PROCESSING %%
+    // %% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    fs::remove_all(graph_folder_old);
+    fs::remove_all(settings.graph_folder);
     // %% DELETE THE GRAPH FOLDER %%            
 }
 #endif

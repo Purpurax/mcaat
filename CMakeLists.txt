@@ -51,10 +51,22 @@ endif()
 
 # Include directories
 include_directories(include)
+
+add_subdirectory(libs/cft)
+include_directories(libs/cft/src)
 include_directories(libs/megahit/src)
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
 include_directories(${phmap_SOURCE_DIR})
+
+# Include fmt
+include(FetchContent)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 10.2.1
+)
+FetchContent_MakeAvailable(fmt)
 
 # Source files
 file(GLOB_RECURSE MAIN_SOURCE "src/*.cpp")
@@ -99,8 +111,17 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -ggdb -O1 -D_LIBCPP_DEBUG -D_GLIBCXX_DEBUG")
 
 # Add executable
-add_executable(mcaat ${MAIN_SOURCE} ${ASMBL_SOURCE} ${IDBA_SOURCE} ${SDBG_SOURCE} ${LCASM_SOURCE}
-    ${SEQ_SOURCE} ${CX1_SOURCE} ${TOOLKIT_SOURCE} ${OTHER_SOURCE} ${SOME_OTHERS})
+add_executable(mcaat
+    ${MAIN_SOURCE}
+    ${ASMBL_SOURCE}
+    ${IDBA_SOURCE}
+    ${SDBG_SOURCE}
+    ${LCASM_SOURCE}
+    ${SEQ_SOURCE}
+    ${CX1_SOURCE}
+    ${TOOLKIT_SOURCE}
+    ${SOME_OTHERS}
+)
 
 # Static build linker flags
 if (STATIC_BUILD)
@@ -109,7 +130,7 @@ if (STATIC_BUILD)
 endif (STATIC_BUILD)
 
 # Link libraries
-target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz)
+target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz fmt::fmt)
 
 # Threading configuration
 if(THREADS_HAVE_PTHREAD_ARG)
