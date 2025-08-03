@@ -12,6 +12,8 @@
 #include "settings.h"
 #include "filters.h"
 #include "cycle_filter.h"
+#include "jumps.h"
+#include "spacer_ordering.h"
 #include <cstring>
 #include "sdbg_build.h"
 #include "post_processing.h"
@@ -459,28 +461,27 @@ int main(int argc, char** argv) {
     // %% FILTER CYCLES %%
     cout << "FILTER CYCLES START:" << endl;
     int amount_of_cycles_before = get_cycle_count(cycles_map);
-    keep_relevant_cycles(cycles_map);
+    // keep_relevant_cycles(cycles_map);
     int amount_of_cycles_after = get_cycle_count(cycles_map);
-    cout << amount_of_cycles_before << " out of ";
-    cout << amount_of_cycles_after << " are omitted" << endl;
+    cout << amount_of_cycles_after << " out of ";
+    cout << amount_of_cycles_before << " are kept" << endl;
     // %% FILTER CYCLES %%
 
     // %% CREATE JUMPS (tmp) %%
-    // todo load in the reads again using the megahit library
-    // todo use the graph to create the jumps
+    cout << "CREATE JUMPS START:" << endl;
+    auto jumps = get_jumps_from_reads(sdbg, settings);
+    cout << "Created " << jumps.size() << " jumps" << endl;
     // %% CREATE JUMPS (tmp) %%
 
-    // %% SPLIT INTO SUBPROBLEMS %%
-    // todo use the cycles to reduce the graph into subgraphs
-    // todo unload the full graph from storage
-    // todo copy over the reads which are relevant in the subgraphs
-    // => should return a vector of subgraph-jumps pair
-    // %% SPLIT INTO SUBPROBLEMS %%
-
     // %% ORDER SPACERS %%
-    // todo for each subproblem use the assembly method from rust
-    // => should return all possible node order solutions
-    // todo compute the confidence value and take a random order solution
+    cout << "ORDER SPACERS:" << endl;
+    auto subgraphs = get_crispr_regions(sdbg, cycles_map);
+    for (const auto& subgraph : subgraphs) {
+        auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
+        auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
+
+        auto all_possible_cycle_orders = order_cycles(subgraph, relevant_jumps, relevant_cycles);
+    }
     // %% ORDER SPACERS %%
 
     // %% FILTERS %%
