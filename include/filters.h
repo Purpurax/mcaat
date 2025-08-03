@@ -32,10 +32,10 @@ public:
     std::vector<uint64_t> FindRepeatNodePaths(vector<uint64_t> repeat_nodes,uint64_t start_node);
     void rotateLeft(std::vector<uint64_t>& arr, int k);
     pair<vector<uint64_t>, vector<vector<uint64_t>>> _FindCRISPRArrayNodes(uint64_t start_node);
-   unordered_map<string, vector<string>> ListArrays(vector<uint64_t> node_order, int& number_of_spacers);
-   string findMostFrequentSequence(const std::string& input, int minLength, int maxLength, int minDistance, int maxDistance);
-   bool isDistanceValid(const std::vector<int>& positions, int minDistance, int maxDistance);
-    int  WriteToFile(vector<uint64_t> node_order, const string& filename);
+    unordered_map<string, vector<string>> ListArrays(vector<uint64_t> node_order, int& number_of_spacers);
+    string findMostFrequentSequence(const std::string& input, int minLength, int maxLength, int minDistance, int maxDistance);
+    bool isDistanceValid(const std::vector<int>& positions, int minDistance, int maxDistance);
+    int WriteToFile(vector<uint64_t> node_order, const string& filename);
     int openFile(const char* filename);
     // Function to get the size of the file
     off_t getFileSize(int fd);

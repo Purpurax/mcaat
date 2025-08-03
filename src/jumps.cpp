@@ -62,7 +62,7 @@ std::vector<Jump> get_jumps_from_reads(SDBG& sdbg, Settings& settings) {
             }
         }
 
-        #pragma omp parallel num_threads(settings->threads_count)
+        #pragma omp parallel num_threads(settings.threads)
         {
             #pragma omp for
             for (const auto& sequence_str : sequences) {
