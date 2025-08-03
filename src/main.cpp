@@ -475,42 +475,55 @@ int main(int argc, char** argv) {
 
     // %% ORDER SPACERS %%
     cout << "ORDER SPACERS:" << endl;
+    std::unordered_map<std::string, std::vector<std::string>> ALL_SYSTEMS;
     auto subgraphs = get_crispr_regions(sdbg, cycles_map);
     for (const auto& subgraph : subgraphs) {
-        std::cout << "Subgraph nodes: " << subgraph.nodes.size() << std::endl;
-        size_t edge_count = 0;
-        for (const auto& edges : subgraph.adjacency_list) {
-            edge_count += edges.second.size();
-        }
-        std::cout << "Subgraph edges: " << edge_count << std::endl;
-
         auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
         std::cout << relevant_jumps.size() << " out of " << jumps.size() << std::endl;
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
 
         auto all_possible_cycle_orders = order_cycles(subgraph, relevant_jumps, relevant_cycles);
+        
+        std::vector<int32_t> sample;
+        if (!all_possible_cycle_orders.empty()) {
+            sample.assign(all_possible_cycle_orders.front().begin(), all_possible_cycle_orders.front().end());
+        } else {
+            std::cout << "No order was found for the cycles." << std::endl;
+            continue;
+        }
+
+        float_t confidence = 1.0f / all_possible_cycle_orders.size();
+        std::cout << "With a confidence of " << confidence;
+        std::cout << " the order is ";
+        for (auto node : sample) {
+            std::cout << node << " ";
+        }
+        std::cout << std::endl;
+
+        auto sample_node_order = turn_cycle_order_into_node_order(sample, relevant_cycles);
+        
+        int number_of_spacers = 0;
+        cout << "FILTERS START:" << endl;
+        // todo modify filters to take in cycle orders to return sequences
+        Filters filters(sdbg, cycles_map);
+        auto systems = filters.ListArrays(sample_node_order, number_of_spacers);
+        for (const auto& pair: systems) {
+            ALL_SYSTEMS.insert(pair);
+        }
+        cout << "Number of spacers: " << number_of_spacers;
+        cout << " before cleaning" << endl;
     }
     // %% ORDER SPACERS %%
 
-    // %% FILTERS %%
-    int number_of_spacers = 0;
-    cout << "FILTERS START:" << endl;
-    // todo modify filters to take in cycle orders to return sequences
-    Filters filters(sdbg, cycles_map);
-    auto SYSTEMS = filters.ListArrays(number_of_spacers);
-    cout << "Number of spacers: " << number_of_spacers;
-    cout << " before cleaning" << endl;
-    // %% FILTERS %%
-
     // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
-    CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
+    CRISPRAnalyzer analyzer(ALL_SYSTEMS, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
     // %% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    // fs::remove_all(settings.graph_folder);
+    fs::remove_all(settings.graph_folder);
     // %% DELETE THE GRAPH FOLDER %%            
 }
 #endif
