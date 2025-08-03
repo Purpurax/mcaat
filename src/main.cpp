@@ -482,31 +482,27 @@ int main(int argc, char** argv) {
         std::cout << relevant_jumps.size() << " out of " << jumps.size() << std::endl;
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
 
-        auto all_possible_cycle_orders = order_cycles(subgraph, relevant_jumps, relevant_cycles);
-        
-        std::vector<int32_t> sample;
-        if (!all_possible_cycle_orders.empty()) {
-            sample.assign(all_possible_cycle_orders.front().begin(), all_possible_cycle_orders.front().end());
-        } else {
-            std::cout << "No order was found for the cycles." << std::endl;
-            continue;
-        }
+        float confidence;
+        auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles, confidence);
 
-        float_t confidence = 1.0f / all_possible_cycle_orders.size();
-        std::cout << "With a confidence of " << confidence;
+        std::cout << "With a confidence of " << std::fixed << std::setprecision(2) << (confidence * 100) << "%";
         std::cout << " the order is ";
-        for (auto node : sample) {
+        for (auto node : cycle_order) {
             std::cout << node << " ";
         }
         std::cout << std::endl;
 
-        auto sample_node_order = turn_cycle_order_into_node_order(sample, relevant_cycles);
+        auto node_order = turn_cycle_order_into_node_order(cycle_order, relevant_cycles);
         
+        if (node_order.size() < 2) {
+            continue;
+        }
+
         int number_of_spacers = 0;
         cout << "FILTERS START:" << endl;
         // todo modify filters to take in cycle orders to return sequences
         Filters filters(sdbg, cycles_map);
-        auto systems = filters.ListArrays(sample_node_order, number_of_spacers);
+        auto systems = filters.ListArrays(node_order, number_of_spacers);
         for (const auto& pair: systems) {
             ALL_SYSTEMS.insert(pair);
         }

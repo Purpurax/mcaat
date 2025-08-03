@@ -27,13 +27,14 @@ std::vector<std::vector<uint64_t>> get_relevant_cycles(
     std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& all_cycles_map
 );
 
-std::vector<std::vector<int32_t>> order_cycles(
+std::vector<int32_t> order_cycles(
     const Graph& graph,
     std::vector<Jump>& jumps,
-    std::vector<std::vector<uint64_t>>& cycles
+    std::vector<std::vector<uint64_t>>& cycles,
+    float& confidence
 );
 
 std::vector<uint64_t> turn_cycle_order_into_node_order(
-    std::vector<int32_t> cycle_order,
+    std::vector<int32_t>& cycle_order,
     std::vector<std::vector<uint64_t>>& cycles
 );

@@ -451,86 +451,74 @@ void resolve_cycles_greedy(
 }
 
 // Helper function to perform all possible topological sorts
-std::vector<std::vector<int32_t>> apply_topological_sort(
+void apply_topological_sort(
     std::vector<int32_t>& possible_start_nodes,
-    std::unordered_map<int32_t, std::vector<int32_t>>& edges
+    std::unordered_map<int32_t, std::vector<int32_t>>& edges,
+    int32_t& possible_choices,
+    std::vector<int32_t>& total_order
 ) {
-    std::vector<std::vector<int32_t>> result;
-
     if (possible_start_nodes.empty()) {
-        std::vector<int32_t> empty_vec;
-        result.push_back(empty_vec);
-        return result;
+        return;
     }
 
-    // To parallelize, you need to copy possible_start_nodes to every thread
-    // In every thread the possible_start_nodes will remove the start node which is thread dependant
-    // The edges can also be copied to each thread and the inner loop will normally be called in every thread
-    // the creation of new_edges should happend by modifying the thread dependant edges in the inner for loop
-    #pragma omp parallel
-    {
-        #pragma omp for
-        for (size_t idx = 0; idx < possible_start_nodes.size(); ++idx) {
-            std::vector<int32_t> new_possible_start_nodes = possible_start_nodes;
-            std::unordered_map<int32_t, std::vector<int32_t>> new_edges = edges;
-            
-            int32_t start_node = new_possible_start_nodes[idx];
+    // for (size_t idx = 0; idx < possible_start_nodes.size(); ++idx) {
+    std::vector<int32_t> new_possible_start_nodes = possible_start_nodes;
+    std::unordered_map<int32_t, std::vector<int32_t>> new_edges = edges;
+    
+    int32_t start_node = new_possible_start_nodes[0];
+    possible_choices *= new_possible_start_nodes.size();
+    total_order.push_back(start_node);
 
-            new_possible_start_nodes.erase(
-                std::remove(new_possible_start_nodes.begin(), new_possible_start_nodes.end(), start_node),
-                new_possible_start_nodes.end()
-            );
+    new_possible_start_nodes.erase(
+        std::remove(new_possible_start_nodes.begin(), new_possible_start_nodes.end(), start_node),
+        new_possible_start_nodes.end()
+    );
 
-            std::vector<int32_t> start_node_candidates;
-            auto it = new_edges.find(start_node);
-            if (it != new_edges.end()) {
-                for (const auto& node : it->second) {
-                    start_node_candidates.push_back(node);
-                }
+    std::vector<int32_t> start_node_candidates;
+    auto it = new_edges.find(start_node);
+    if (it != new_edges.end()) {
+        for (const auto& node : it->second) {
+            start_node_candidates.push_back(node);
+        }
+    }
+    for (auto it = new_edges.begin(); it != new_edges.end(); ) {
+        if (it->first == start_node) {
+            it = new_edges.erase(it);
+        } else {
+            // Remove any occurrence of start_node in the value vector
+            auto& vec = it->second;
+            vec.erase(std::remove(vec.begin(), vec.end(), start_node), vec.end());
+            ++it;
+        }
+    }
+    for (const auto& start_node_candidate : start_node_candidates) {
+        bool has_other_incoming = false;
+        for (const auto& edge : new_edges) {
+            bool destinations_contain_candidate = std::find(edge.second.begin(), edge.second.end(), start_node_candidate) != edge.second.end();
+            if (destinations_contain_candidate) {
+                has_other_incoming = true;
+                break;
             }
-            for (auto it = new_edges.begin(); it != new_edges.end(); ) {
-                if (it->first == start_node) {
-                    it = new_edges.erase(it);
-                } else {
-                    // Remove any occurrence of start_node in the value vector
-                    auto& vec = it->second;
-                    vec.erase(std::remove(vec.begin(), vec.end(), start_node), vec.end());
-                    ++it;
-                }
-            }
-            for (const auto& start_node_candidate : start_node_candidates) {
-                bool has_other_incoming = false;
-                for (const auto& edge : new_edges) {
-                    bool destinations_contain_candidate = std::find(edge.second.begin(), edge.second.end(), start_node_candidate) != edge.second.end();
-                    if (destinations_contain_candidate) {
-                        has_other_incoming = true;
-                        break;
-                    }
-                }
-                if (!has_other_incoming) {
-                    new_possible_start_nodes.push_back(start_node_candidate);
-                }
-            }
-
-            auto solutions_rec = apply_topological_sort(new_possible_start_nodes, new_edges);
-            
-            #pragma omp critical
-            {
-                for (const auto& solution_rec : solutions_rec) {
-                    std::vector<int32_t> solution = solution_rec;
-                    solution.insert(solution.begin(), start_node);
-                    result.push_back(solution);
-                }
-            }
+        }
+        if (!has_other_incoming) {
+            new_possible_start_nodes.push_back(start_node_candidate);
         }
     }
 
-    return result;
+    apply_topological_sort(new_possible_start_nodes, new_edges, possible_choices, total_order);
+    
+    // for (const auto& solution_rec : solutions_rec) {
+    //     std::vector<int32_t> solution = solution_rec;
+    //     solution.insert(solution.begin(), start_node);
+    //     result.push_back(solution);
+    // }
+    // }
 }
 
-std::vector<std::vector<int32_t>> solve_constraints_with_topological_sort(
-    std::vector<std::tuple<uint32_t, uint32_t>> constraints,
-    std::vector<int32_t> nodes
+std::vector<int32_t> solve_constraints_with_topological_sort(
+    std::vector<std::tuple<uint32_t, uint32_t>>& constraints,
+    std::vector<int32_t>& nodes,
+    float& confidence
 ) {
     // Build edges map
     std::unordered_map<int32_t, std::vector<int32_t>> edges;
@@ -572,7 +560,11 @@ std::vector<std::vector<int32_t>> solve_constraints_with_topological_sort(
     }
     std::cout << std::endl;
 
-    auto all_orders = apply_topological_sort(possible_start_nodes, edges);
+    std::vector<int32_t> total_order;
+    int32_t possible_choices = 1;
+    apply_topological_sort(possible_start_nodes, edges, possible_choices, total_order);
+
+    confidence = 1.0f / possible_choices;
 
     // std::cout << "All possible topological orders:" << std::endl;
     // for (const auto& order : all_orders) {
@@ -584,13 +576,14 @@ std::vector<std::vector<int32_t>> solve_constraints_with_topological_sort(
     //     std::cout << " ]" << std::endl;
     // }
 
-    return all_orders;
+    return total_order;
 }
 
-std::vector<std::vector<int32_t>> order_cycles(
+std::vector<int32_t> order_cycles(
     const Graph& graph,
     std::vector<Jump>& jumps,
-    std::vector<std::vector<uint64_t>>& cycles
+    std::vector<std::vector<uint64_t>>& cycles,
+    float& confidence
 ) {
     auto node_to_cycle_map = get_node_to_cycle_map(cycles);
     auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
@@ -598,11 +591,11 @@ std::vector<std::vector<int32_t>> order_cycles(
     std::cout << "Constraints before resolving cycles: " << constraints.size() << std::endl;
     resolve_cycles_greedy(constraints, cycles);
     std::cout << "Constraints after resolving cycles: " << constraints.size() << std::endl;
-    return solve_constraints_with_topological_sort(constraints, all_cycle_indices);
+    return solve_constraints_with_topological_sort(constraints, all_cycle_indices, confidence);
 }
 
 std::vector<uint64_t> turn_cycle_order_into_node_order(
-    std::vector<int32_t> cycle_order,
+    std::vector<int32_t>& cycle_order,
     std::vector<std::vector<uint64_t>>& cycles
 ) {
     std::vector<uint64_t> node_order;
