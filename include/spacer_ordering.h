@@ -4,13 +4,6 @@
 #include <algorithm>
 #include "jumps.h"
 
-// #include "definitions.h"
-// #include "sorting/kmer_counter.h"
-// #include "sorting/read_to_sdbg.h"
-// #include "sorting/seq_to_sdbg.h"
-// #include "utils/options_description.h"
-// #include "utils/utils.h"
-
 struct Graph {
     std::unordered_map<uint64_t, std::vector<uint64_t>> adjacency_list;
     std::unordered_set<uint64_t> nodes;
@@ -37,5 +30,10 @@ std::vector<std::vector<uint64_t>> get_relevant_cycles(
 std::vector<std::vector<int32_t>> order_cycles(
     const Graph& graph,
     std::vector<Jump>& jumps,
+    std::vector<std::vector<uint64_t>>& cycles
+);
+
+std::vector<uint64_t> turn_cycle_order_into_node_order(
+    std::vector<int32_t> cycle_order,
     std::vector<std::vector<uint64_t>>& cycles
 );

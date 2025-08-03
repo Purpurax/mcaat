@@ -62,38 +62,45 @@ std::vector<Jump> get_jumps_from_reads(SDBG& sdbg, Settings& settings) {
             }
         }
 
-        for (const auto& sequence_str : sequences) {
-            size_t seq_length = sequence_str.length();
-            if (seq_length < 2 * K) continue;
-            
-            std::string start_k_mer = sequence_str.substr(0, K);
-            std::string end_k_mer = sequence_str.substr(seq_length - K, K);
-            
-            // Use lookup table instead of linear search
-            uint64_t start_node_id = INVALID_VERTEX_ID;
-            uint64_t end_node_id = INVALID_VERTEX_ID;
-            
-            auto start_it = kmer_to_node.find(start_k_mer);
-            if (start_it != kmer_to_node.end()) {
-                start_node_id = start_it->second;
-            }
-            
-            auto end_it = kmer_to_node.find(end_k_mer);
-            if (end_it != kmer_to_node.end()) {
-                end_node_id = end_it->second;
-            }
-            
-            if (start_node_id != INVALID_VERTEX_ID && end_node_id != INVALID_VERTEX_ID) {
-                Jump jump;
-                jump.start_k_mer_id = start_node_id;
-                jump.end_k_mer_id = end_node_id;
-                jump.nodes_in_between = (seq_length >= 2 * K - 1) ? 
-                                        (seq_length - K + 1 - 2) : 0;
-                jumps.push_back(jump);
-            // } else {
-            //     std::cout << "SEQUENCE ## " << sequence_str << " failed to be a jump" << std::endl;
-            //     std::cout << "  start_k_mer: " << start_k_mer << " -> node_id: " << start_node_id << std::endl;
-            //     std::cout << "  end_k_mer:   " << end_k_mer   << " -> node_id: " << end_node_id << std::endl;
+        #pragma omp parallel num_threads(settings->threads_count)
+        {
+            #pragma omp for
+            for (const auto& sequence_str : sequences) {
+                size_t seq_length = sequence_str.length();
+                if (seq_length < 2 * K) continue;
+                
+                std::string start_k_mer = sequence_str.substr(0, K);
+                std::string end_k_mer = sequence_str.substr(seq_length - K, K);
+                
+                // Use lookup table instead of linear search
+                uint64_t start_node_id = INVALID_VERTEX_ID;
+                uint64_t end_node_id = INVALID_VERTEX_ID;
+                
+                auto start_it = kmer_to_node.find(start_k_mer);
+                if (start_it != kmer_to_node.end()) {
+                    start_node_id = start_it->second;
+                }
+                
+                auto end_it = kmer_to_node.find(end_k_mer);
+                if (end_it != kmer_to_node.end()) {
+                    end_node_id = end_it->second;
+                }
+                
+                if (start_node_id != INVALID_VERTEX_ID && end_node_id != INVALID_VERTEX_ID) {
+                    Jump jump;
+                    jump.start_k_mer_id = start_node_id;
+                    jump.end_k_mer_id = end_node_id;
+                    jump.nodes_in_between = (seq_length >= 2 * K - 1) ? 
+                                            (seq_length - K + 1 - 2) : 0;
+                    #pragma omp critical
+                    {
+                        jumps.push_back(jump);
+                    }
+                // } else {
+                //     std::cout << "SEQUENCE ## " << sequence_str << " failed to be a jump" << std::endl;
+                //     std::cout << "  start_k_mer: " << start_k_mer << " -> node_id: " << start_node_id << std::endl;
+                //     std::cout << "  end_k_mer:   " << end_k_mer   << " -> node_id: " << end_node_id << std::endl;
+                }
             }
         }
     } catch (const std::exception& e) {

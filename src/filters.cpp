@@ -182,7 +182,10 @@ std::string Filters::findMostFrequentSequence(const std::string& input, int minL
     return mostFrequentSequence;
 }
 
-unordered_map<string, vector<string>> Filters::ListArrays(int& number_of_spacers) {
+unordered_map<string, vector<string>> Filters::ListArrays(
+    vector<uint64_t> node_order,
+    int& number_of_spacers
+) {
     unordered_map<string, vector<string>> CRISPRArrays;
     int counter = 0;
     for (const auto& [start_node, _] : cycles) {
@@ -205,20 +208,14 @@ unordered_map<string, vector<string>> Filters::ListArrays(int& number_of_spacers
             
             vector<string> spacers_temp;
             vector<string> spacers;
-            string all_cycles_togehter;
-            for (const auto& cycle : cycles_nodes) {
-                std::string cycle_str =_FetchNodeLabel(cycle[0]);
-                for (size_t i = 1; i < cycle.size(); i++) {
-                    uint64_t node = cycle[i];
-                    std::string node_label = _FetchNodeLabel(node);
-                    // Method 1: Using back() method
-                    char lastChar = node_label.back();  // Get the last character
-                    std::string lastCharStr(1, lastChar);  // Convert char to string
-                    cycle_str += lastCharStr;
-                    
-                }
-               
-                all_cycles_togehter += cycle_str.substr(0, cycle_str.size()-21);
+            string all_cycles_togehter = _FetchNodeLabel(node_order[0]);
+            for (int i = 1; i < node_order.size(); ++i) {
+                uint64_t node = node_order[i];
+                std::string node_label = _FetchNodeLabel(node);
+                // Method 1: Using back() method
+                char lastChar = node_label.back();  // Get the last character
+                std::string lastCharStr(1, lastChar);  // Convert char to string
+                all_cycles_togehter += lastCharStr;
             }
             
             size_t start = 0;
@@ -258,7 +255,7 @@ unordered_map<string, vector<string>> Filters::ListArrays(int& number_of_spacers
     return CRISPRArrays;
 }
 
-int Filters::WriteToFile(const string& filename) {
+int Filters::WriteToFile(vector<uint64_t> node_order, const string& filename) {
     
     ofstream file(filename);
     if (!file.is_open()) {
@@ -266,7 +263,7 @@ int Filters::WriteToFile(const string& filename) {
     }
     int number_of_spacers = 0;
     
-    auto CRISPRArrays = ListArrays(number_of_spacers);
+    auto CRISPRArrays = ListArrays(node_order, number_of_spacers);
     
     for (const auto& [repeat, spacers] : CRISPRArrays) {
         
