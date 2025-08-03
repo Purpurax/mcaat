@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "sequence/io/sequence_lib.h"
 #include "idba/sequence.h"
+#include "kseq++/seqio.hpp"
 
 struct Jump {
     uint64_t start_k_mer_id;

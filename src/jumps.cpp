@@ -20,78 +20,85 @@ std::vector<Jump> get_jumps_from_reads(SDBG& sdbg, Settings& settings) {
     }
 
     try {
-        // Check if the library files exist
-        std::string lib_prefix = settings.graph_folder + "/outfile_prefix";
-        std::string lib_info_file = lib_prefix + ".lib_info";
-        std::string lib_bin_file = lib_prefix + ".bin";
-        
-        if (!std::filesystem::exists(lib_info_file)) {
-            std::cerr << "Library info file not found: " << lib_info_file << std::endl;
-            return jumps;
-        }
-        
-        if (!std::filesystem::exists(lib_bin_file)) {
-            std::cerr << "Library binary file not found: " << lib_bin_file << std::endl;
-            return jumps;
-        }
+        std::vector<std::string> sequences;
+        if (settings.input_files.find(" ") != std::string::npos) {
+            size_t space_pos = settings.input_files.find(" ");
+            std::string input_file1 = settings.input_files.substr(0, space_pos);
+            std::string input_file2 = settings.input_files.substr(space_pos + 1);
 
-        // Initialize SeqPackage and SequenceLibCollection properly
-        SeqPackage data_holder;
-        SequenceLibCollection seq_libs;
-        seq_libs.SetPath(lib_prefix);  // Set path without extension
-        
-        // Read the library
-        seq_libs.Read(&data_holder, false);  // Don't reverse sequences
-        std::cout << "Successfully loaded sequence library" << std::endl;
-        
-        for (size_t lib_id = 0; lib_id < seq_libs.size(); ++lib_id) {
-            const SequenceLib& lib = seq_libs.GetLib(lib_id);
-            
-            for (size_t i = 0; i < lib.seq_count(); ++i) {
-                auto seq_view = lib.GetSequenceView(i);
-                
-                // Build sequence string more efficiently
-                std::string sequence_str;
-                sequence_str.reserve(seq_view.length());
-                for (unsigned j = 0; j < seq_view.length(); ++j) {
-                    sequence_str += "ACGT"[seq_view.base_at(j)];
+            // Strip leading/trailing whitespace
+            input_file1.erase(0, input_file1.find_first_not_of(" \t\n\r"));
+            input_file1.erase(input_file1.find_last_not_of(" \t\n\r") + 1);
+            input_file2.erase(0, input_file2.find_first_not_of(" \t\n\r"));
+            input_file2.erase(input_file2.find_last_not_of(" \t\n\r") + 1);
+
+            klibpp::SeqStreamIn iss1(input_file1.c_str());
+            auto file_records1 = iss1.read();
+            for (const auto& record : file_records1) {
+                sequences.push_back(record.seq);
+            }
+
+            klibpp::SeqStreamIn iss2(input_file2.c_str());
+            auto file_records2 = iss2.read();
+            for (const auto& record : file_records2) {
+                std::string reversed_seq = record.seq;
+                std::reverse(reversed_seq.begin(), reversed_seq.end());
+                // Reverse complement: reverse and complement each base
+                for (char& base : reversed_seq) {
+                    switch (base) {
+                        case 'A': base = 'T'; break;
+                        case 'T': base = 'A'; break;
+                        case 'C': base = 'G'; break;
+                        case 'G': base = 'C'; break;
+                    }
                 }
-                
-                size_t seq_length = sequence_str.length();
-                if (seq_length < 2 * K) continue;
-                
-                std::string start_k_mer = sequence_str.substr(0, K);
-                std::string end_k_mer = sequence_str.substr(seq_length - K, K);
-                
-                // Use lookup table instead of linear search
-                uint64_t start_node_id = INVALID_VERTEX_ID;
-                uint64_t end_node_id = INVALID_VERTEX_ID;
-                
-                auto start_it = kmer_to_node.find(start_k_mer);
-                if (start_it != kmer_to_node.end()) {
-                    start_node_id = start_it->second;
-                }
-                
-                auto end_it = kmer_to_node.find(end_k_mer);
-                if (end_it != kmer_to_node.end()) {
-                    end_node_id = end_it->second;
-                }
-                
-                if (start_node_id != INVALID_VERTEX_ID && end_node_id != INVALID_VERTEX_ID) {
-                    Jump jump;
-                    jump.start_k_mer_id = start_node_id;
-                    jump.end_k_mer_id = end_node_id;
-                    jump.nodes_in_between = (seq_length >= 2 * K - 1) ? 
-                                          (seq_length - K + 1 - 2) : 0;
-                    jumps.push_back(jump);
-                }
+                sequences.push_back(reversed_seq);
+            }
+        } else {
+            klibpp::SeqStreamIn iss(settings.input_files.c_str());
+            auto file_records = iss.read();
+            for (const auto& record : file_records) {
+                sequences.push_back(record.seq);
             }
         }
-        
+
+        for (const auto& sequence_str : sequences) {
+            size_t seq_length = sequence_str.length();
+            if (seq_length < 2 * K) continue;
+            
+            std::string start_k_mer = sequence_str.substr(0, K);
+            std::string end_k_mer = sequence_str.substr(seq_length - K, K);
+            
+            // Use lookup table instead of linear search
+            uint64_t start_node_id = INVALID_VERTEX_ID;
+            uint64_t end_node_id = INVALID_VERTEX_ID;
+            
+            auto start_it = kmer_to_node.find(start_k_mer);
+            if (start_it != kmer_to_node.end()) {
+                start_node_id = start_it->second;
+            }
+            
+            auto end_it = kmer_to_node.find(end_k_mer);
+            if (end_it != kmer_to_node.end()) {
+                end_node_id = end_it->second;
+            }
+            
+            if (start_node_id != INVALID_VERTEX_ID && end_node_id != INVALID_VERTEX_ID) {
+                Jump jump;
+                jump.start_k_mer_id = start_node_id;
+                jump.end_k_mer_id = end_node_id;
+                jump.nodes_in_between = (seq_length >= 2 * K - 1) ? 
+                                        (seq_length - K + 1 - 2) : 0;
+                jumps.push_back(jump);
+            // } else {
+            //     std::cout << "SEQUENCE ## " << sequence_str << " failed to be a jump" << std::endl;
+            //     std::cout << "  start_k_mer: " << start_k_mer << " -> node_id: " << start_node_id << std::endl;
+            //     std::cout << "  end_k_mer:   " << end_k_mer   << " -> node_id: " << end_node_id << std::endl;
+            }
+        }
     } catch (const std::exception& e) {
         std::cerr << "Error reading sequences: " << e.what() << std::endl;
     }
 
-    std::cout << "Generated " << jumps.size() << " jumps from reads" << std::endl;
     return jumps;
 }

@@ -94,6 +94,9 @@ void keep_crispr_regions(
         }
     }
 
+    std::cout << "Set set for crispr regions is ";
+    std::cout << cycle_nodes.size() << " nodes" << std::endl;
+
     #pragma omp parallel for
     for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
         if (sdbg.IsValidEdge(node_id)) {
@@ -104,10 +107,17 @@ void keep_crispr_regions(
         }
     }
 
+    size_t valid_edge_count = 0;
+    for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
+        if (sdbg.IsValidEdge(node_id)) {
+            valid_edge_count++;
+        }
+    }
+    std::cout << "keep_crispr_regions sdbg has " << valid_edge_count;
+    std::cout << " valid edges remaining" << std::endl;
+
     sdbg.FreeMultiplicity();
 }
-
-
 
 std::vector<Graph> divide_graph_into_subgraphs(SDBG& sdbg) {
     std::vector<Graph> subgraphs;
@@ -115,6 +125,20 @@ std::vector<Graph> divide_graph_into_subgraphs(SDBG& sdbg) {
     // Find strongly connected components using Tarjan's algorithm
     TarjanSCC tarjan(sdbg);
     auto components = tarjan.find_components();
+
+    std::cout << "Components: [";
+    for (size_t i = 0; i < components.size(); ++i) {
+        std::vector<uint64_t> sorted_component = components[i];
+        std::sort(sorted_component.begin(), sorted_component.end());
+        std::cout << "[";
+        for (size_t j = 0; j < sorted_component.size(); ++j) {
+            std::cout << sorted_component[j];
+            if (j + 1 < sorted_component.size()) std::cout << ",";
+        }
+        std::cout << "]";
+        if (i + 1 < components.size()) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
     
     std::cout << "Found " << components.size() << " strongly connected components" << std::endl;
     
@@ -412,7 +436,7 @@ void resolve_cycles_greedy(
         auto edge_to_remove = resolve_cycles_greedy_best_edge(edges_with_weights, cycles);
         removed_edges.push_back(edge_to_remove);
         edges_with_weights.erase(edge_to_remove);
-        std::cout << "Removed edge: (" << std::get<0>(edge_to_remove) << ", " << std::get<1>(edge_to_remove) << ")" << std::endl;
+        // std::cout << "Removed edge: (" << std::get<0>(edge_to_remove) << ", " << std::get<1>(edge_to_remove) << ")" << std::endl;
     }
 
     // Remove constraints that were removed
@@ -518,21 +542,25 @@ std::vector<std::vector<int32_t>> solve_constraints_with_topological_sort(
             possible_start_nodes.push_back(node);
         }
     }
+
     std::cout << "Node set: ";
     for (const auto& node : nodes) {
         std::cout << node << " ";
     }
     std::cout << std::endl;
+
     auto all_orders = apply_topological_sort(possible_start_nodes, edges);
-    std::cout << "All possible topological orders:" << std::endl;
-    for (const auto& order : all_orders) {
-        std::cout << "[ ";
-        for (size_t i = 0; i < order.size(); ++i) {
-            std::cout << order[i];
-            if (i + 1 < order.size()) std::cout << ", ";
-        }
-        std::cout << " ]" << std::endl;
-    }
+
+    // std::cout << "All possible topological orders:" << std::endl;
+    // for (const auto& order : all_orders) {
+    //     std::cout << "[ ";
+    //     for (size_t i = 0; i < order.size(); ++i) {
+    //         std::cout << order[i];
+    //         if (i + 1 < order.size()) std::cout << ", ";
+    //     }
+    //     std::cout << " ]" << std::endl;
+    // }
+
     return all_orders;
 }
 

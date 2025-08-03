@@ -477,7 +477,15 @@ int main(int argc, char** argv) {
     cout << "ORDER SPACERS:" << endl;
     auto subgraphs = get_crispr_regions(sdbg, cycles_map);
     for (const auto& subgraph : subgraphs) {
+        std::cout << "Subgraph nodes: " << subgraph.nodes.size() << std::endl;
+        size_t edge_count = 0;
+        for (const auto& edges : subgraph.adjacency_list) {
+            edge_count += edges.second.size();
+        }
+        std::cout << "Subgraph edges: " << edge_count << std::endl;
+
         auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
+        std::cout << relevant_jumps.size() << " out of " << jumps.size() << std::endl;
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
 
         auto all_possible_cycle_orders = order_cycles(subgraph, relevant_jumps, relevant_cycles);
@@ -502,7 +510,7 @@ int main(int argc, char** argv) {
     // %% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    fs::remove_all(settings.graph_folder);
+    // fs::remove_all(settings.graph_folder);
     // %% DELETE THE GRAPH FOLDER %%            
 }
 #endif
