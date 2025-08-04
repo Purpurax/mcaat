@@ -54,6 +54,8 @@ include_directories(include)
 
 add_subdirectory(libs/cft)
 include_directories(libs/cft/src)
+add_subdirectory(libs/kseqpp)
+include_directories(libs/kseqpp/include)
 include_directories(libs/megahit/src)
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
@@ -137,10 +139,9 @@ if(THREADS_HAVE_PTHREAD_ARG)
     target_compile_options(mcaat PUBLIC "-pthread")
 endif()
 if(CMAKE_THREAD_LIBS_INIT)
-    target_link_libraries(mcaat PRIVATE "${CMAKE_THREAD_LIBS_INIT}")
+    target_link_libraries(mcaat "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-# Development features
 if(DEBUG)
     include(FetchContent)
     FetchContent_Declare(
@@ -151,4 +152,22 @@ if(DEBUG)
     FetchContent_MakeAvailable(json)
     target_link_libraries(mcaat PRIVATE nlohmann_json::nlohmann_json)
     target_compile_definitions(mcaat PRIVATE DEBUG)
+endif()
+
+# Doxygen Documenation for cpp configurations
+find_package(Doxygen)
+if (DOXYGEN_FOUND)
+    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/Doxyfile)
+    set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/include/Doxyfile)
+
+    configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} COPYONLY)
+
+    add_custom_target(doc
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+else()
+    message(STATUS "Doxygen not found, 'doc' target will not be available.")
 endif()

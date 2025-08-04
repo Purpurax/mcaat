@@ -1,25 +1,15 @@
-//test myLib.h
 #include <iostream>
-#include "sdbg/sdbg.h"
-#include "cycle_finder.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <cstring>
+#include <cctype>
+#include <unordered_map>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "settings.h"
-#include "filters.h"
-#include "cycle_filter.h"
-#include "jumps.h"
-#include "spacer_ordering.h"
-#include <cstring>
-#include "sdbg_build.h"
-#include "post_processing.h"
-#include <cctype>
-#include <unordered_map>
-#include "phage_curator.h"
 #ifdef __linux__
 #include <sys/sysinfo.h>
 #elif defined(_WIN32)
@@ -30,6 +20,18 @@
 #ifdef DEVELOP
 #include "io_ops.h"
 #endif
+
+#include "cycle_finder.h"
+#include "cycle_filter.h"
+#include "filters.h"
+#include "jumps.h"
+#include "post_processing.h"
+#include "sdbg/sdbg.h"
+#include "sdbg_build.h"
+#include "settings.h"
+#include "spacer_ordering.h"
+#include "tmp_utils.h"
+
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -469,7 +471,8 @@ int main(int argc, char** argv) {
 
     // %% CREATE JUMPS (tmp) %%
     cout << "CREATE JUMPS START:" << endl;
-    auto jumps = get_jumps_from_reads(sdbg, settings);
+    auto fastq_files = get_fastq_files_from_settings(settings);
+    auto jumps = get_jumps_from_reads(sdbg, fastq_files.first, fastq_files.second, settings.threads);
     cout << "Created " << jumps.size() << " jumps" << endl;
     // %% CREATE JUMPS (tmp) %%
 

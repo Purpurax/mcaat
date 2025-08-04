@@ -446,7 +446,7 @@ int CycleFinder::FindApproximateCRISPRArrays()
         auto thread_count = this->threads_count;
         if (static_cast<int>(nodes_iterator->second.size()) < thread_count)
             thread_count = nodes_iterator->second.size();
-        #pragma omp parallel for num_threads(thread_count) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
+        // #pragma omp parallel for num_threads(thread_count) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
         for (uint64_t start_node_index = 0; start_node_index < nodes_iterator->second.size(); start_node_index++) {
             uint64_t start_node = nodes_iterator->second[start_node_index];
             if (this->visited[start_node]) continue;
