@@ -18,11 +18,34 @@
 #define INCLUDE_JUMPS_H_
 
 #include <iostream>
+/**
+ * @file jumps.h
+ * @brief Utilities for mapping sequencing reads to graph nodes using k-mer IDs.
+ *
+ * This header provides structures and functions for representing and extracting
+ * simplified read mappings ("jumps") onto a graph, primarily for use in graph-based
+ * sequence analysis. It includes functionality for parsing FASTQ files, manipulating
+ * nucleotide sequences, and interfacing with succinct De Bruijn graphs (SDBG).
+ *
+ * Main features:
+ * - Jump struct for abstracting read paths via node IDs.
+ * - Functions for extracting sequences from FASTQ files.
+ * - Utilities for mapping k-mers to graph node IDs.
+ * - Methods for constructing jumps from reads and graph mappings.
+ */
+
+#ifndef INCLUDE_JUMPS_H_
+#define INCLUDE_JUMPS_H_
+
+#include <iostream>
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
+#include <unordered_map>
 #include <string>
 #include <filesystem>
+#include <optional>
+
 #include <optional>
 
 #include "sdbg/sdbg.h"
@@ -30,6 +53,18 @@
 #include "idba/sequence.h"
 #include "kseq++/seqio.hpp"
 
+using namespace std;
+
+/**
+ * @struct Jump
+ * @brief Represents a simplified mapping of a read onto a graph using node IDs.
+ *
+ * The Jump structure abstracts a read by storing only the start and end node IDs (k-mer IDs)
+ * and the number of nodes traversed in between, omitting the actual sequence data.
+ * This is useful for graph-based sequence analysis where only the path information is required.
+ *
+ * @note The Jump depends on a graph structure that assigns unique node IDs to k-mers.
+ */
 using namespace std;
 
 /**
@@ -88,7 +123,7 @@ string reverse_pair_ends_sequence(string sequence);
  * @param K The kmer size
  * @return Returns the Jump as (std::optional<Jump>) and nothing if Jump is not valid 
  */
-std::optional<Jump> create_jump_from_sequence(
+optional<Jump> create_jump_from_sequence(
     const string& sequence,
     const unordered_map<string, uint64_t>& kmer_to_node_id,
     const uint32_t K
