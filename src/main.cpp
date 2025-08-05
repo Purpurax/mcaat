@@ -221,7 +221,6 @@ Settings parse_arguments(int argc, char* argv[]) {
     return settings;
 }
 
-
 string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
     std::string label;            
     uint8_t seq[sdbg.k()];
@@ -280,50 +279,91 @@ int main(int argc, char** argv) {
     cout << amount_of_cycles_before << " are kept" << endl;
     // %% FILTER CYCLES %%
 
-    // %% CREATE JUMPS (tmp) %%
-    cout << "CREATE JUMPS START:" << endl;
+    std::chrono::_V2::system_clock::time_point start_time;
+    std::chrono::_V2::system_clock::time_point end_time;
+
+    cout << "\n══════════════════════════════════════════════" << endl;
+    cout << "🔸STEP 6: Creating the jumps" << endl;
+    cout << "══════════════════════════════════════════════" << endl;
+    start_time = std::chrono::high_resolution_clock::now();
+
     auto fastq_files = get_fastq_files_from_settings(settings);
     auto jumps = get_jumps_from_reads(sdbg, fastq_files.first, fastq_files.second, settings.threads);
-    cout << "Created " << jumps.size() << " jumps" << endl;
-    // %% CREATE JUMPS (tmp) %%
+    cout << "    ▸ Created " << jumps.size() << " jumps" << endl;
 
-    // %% ORDER SPACERS %%
-    cout << "ORDER SPACERS:" << endl;
-    std::unordered_map<std::string, std::vector<std::string>> ALL_SYSTEMS;
+    end_time = std::chrono::high_resolution_clock::now();
+    cout << "\n⏳ Time elapsed: ";
+    cout << std::fixed << std::setprecision(2);
+    cout << std::chrono::duration<double>(end_time - start_time).count();
+    cout << " seconds" << endl;
+
+    cout << "\n══════════════════════════════════════════════" << endl;
+    cout << "🔸STEP 7: Order the spacers" << endl;
+    cout << "══════════════════════════════════════════════" << endl;
+    start_time = std::chrono::high_resolution_clock::now();
+
+    
+    cout << "  ▸ Splitting into subproblems" << endl;
     auto subgraphs = get_crispr_regions(sdbg, cycles_map);
-    for (const auto& subgraph : subgraphs) {
+    
+    cout << "  🔄 Repeating for " << subgraphs.size();
+    cout << " subproblems..." << endl;
+    unordered_map<string, vector<string>> ALL_SYSTEMS;
+    for (size_t idx = 0; idx < subgraphs.size(); ++idx) {
+        const auto& subgraph = subgraphs[idx];
         auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
-        std::cout << relevant_jumps.size() << " out of " << jumps.size() << std::endl;
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
+        
+        cout << "    Subproblem " << idx + 1 << "/";
+        cout << subgraphs.size() << ":" << endl;
+        
+        cout << "      🛈 Graph with " << subgraph.nodes.size();
+        cout << " nodes and " << subgraph.edge_count() << " edges" << endl;
+
+        cout << "      🛈 Jumps with " << relevant_jumps.size() << "/";
+        cout << jumps.size() << " used" << endl;
+
+        cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
+        cout << get_cycle_count(cycles_map) << " used" << endl;
 
         float confidence;
         auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles, confidence);
 
-        std::cout << "With a confidence of " << std::fixed << std::setprecision(2) << (confidence * 100) << "%";
-        std::cout << " the order is ";
+        cout << "      ▸ With a confidence of " << std::fixed << std::setprecision(2);
+        cout << (confidence * 100) << "%" << " the order is ";
         for (auto node : cycle_order) {
-            std::cout << node << " ";
+            cout << node << " ";
         }
-        std::cout << std::endl;
+        cout << endl;
 
+        cout << "      ▸ Turning the cycle order into a node order" << endl;
         auto node_order = turn_cycle_order_into_node_order(cycle_order, relevant_cycles);
         
         if (node_order.size() < 2) {
+            cout << "      ▸ Node order is to short and is not processed further" << endl;
             continue;
         }
 
         int number_of_spacers = 0;
-        cout << "FILTERS START:" << endl;
+        cout << "      ▸ Staring the filter process:" << endl;
         // todo modify filters to take in cycle orders to return sequences
         Filters filters(sdbg, cycles_map);
         auto systems = filters.ListArrays(node_order, number_of_spacers);
         for (const auto& pair: systems) {
             ALL_SYSTEMS.insert(pair);
         }
-        cout << "Number of spacers: " << number_of_spacers;
+        cout << "        ▸ Number of spacers: " << number_of_spacers;
         cout << " before cleaning" << endl;
     }
-    // %% ORDER SPACERS %%
+    cout << "  ✅ Completed each subproblem" << endl;
+
+    end_time = std::chrono::high_resolution_clock::now();
+    cout << "\n⏳ Time elapsed: ";
+    cout << std::fixed << std::setprecision(2);
+    cout << std::chrono::duration<double>(end_time - start_time).count();
+    cout << " seconds" << endl;
+    
+    cout << "══════════════════════════════════════════════" << endl;
 
     // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
