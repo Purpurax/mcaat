@@ -2,15 +2,15 @@
 
 class TarjanSCC {
 private:
-    SDBG& sdbg;
-    std::unordered_map<uint64_t, int> index_map;
-    std::unordered_map<uint64_t, int> lowlink_map;
-    std::unordered_set<uint64_t> on_stack;
+    const SDBG& sdbg;
+    unordered_map<uint64_t, int> index_map;
+    unordered_map<uint64_t, int> lowlink_map;
+    unordered_set<uint64_t> on_stack;
     std::stack<uint64_t> stack;
-    std::vector<std::vector<uint64_t>> components;
+    vector<vector<uint64_t>> components;
     int index_counter;
 
-    void strongconnect(uint64_t node) {
+    void strongconnect(const uint64_t node) {
         index_map[node] = index_counter;
         lowlink_map[node] = index_counter;
         index_counter++;
@@ -23,7 +23,7 @@ private:
             uint64_t* outgoings = new uint64_t[outdegree];
             if (sdbg.OutgoingEdges(node, outgoings) != -1) {
                 for (int i = 0; i < outdegree; ++i) {
-                    uint64_t neighbor = outgoings[i];
+                    const uint64_t neighbor = outgoings[i];
                     if (!sdbg.IsValidEdge(neighbor)) continue;
                     
                     if (index_map.find(neighbor) == index_map.end()) {
@@ -39,7 +39,7 @@ private:
 
         // If node is a root node, pop the stack and create an SCC
         if (lowlink_map[node] == index_map[node]) {
-            std::vector<uint64_t> component;
+            vector<uint64_t> component;
             uint64_t w;
             do {
                 w = stack.top();
@@ -55,11 +55,11 @@ private:
     }
 
 public:
-    TarjanSCC(SDBG& graph) : sdbg(graph), index_counter(0) {}
+    TarjanSCC(const SDBG& graph) : sdbg(graph), index_counter(0) {}
 
-    std::vector<std::vector<uint64_t>> find_components() {
+    vector<vector<uint64_t>> find_components() {
         // Find all valid nodes first
-        std::vector<uint64_t> valid_nodes;
+        vector<uint64_t> valid_nodes;
         for (uint64_t node = 0; node < sdbg.size(); ++node) {
             if (sdbg.IsValidEdge(node)) {
                 valid_nodes.push_back(node);
@@ -67,7 +67,7 @@ public:
         }
 
         // Run Tarjan's algorithm on all unvisited valid nodes
-        for (uint64_t node : valid_nodes) {
+        for (const uint64_t node : valid_nodes) {
             if (index_map.find(node) == index_map.end()) {
                 strongconnect(node);
             }
@@ -79,25 +79,15 @@ public:
 
 void keep_crispr_regions(
     SDBG& sdbg,
-    std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles
+    const vector<vector<uint64_t>>& cycles
 ) {
-    std::unordered_set<uint64_t> cycle_nodes;
-    for (const auto& [start_node, cycle_list] : cycles) {
-        // Add the start node
-        cycle_nodes.insert(start_node);
-        
-        // Add all nodes from all cycles
-        for (const auto& cycle : cycle_list) {
-            for (uint64_t node : cycle) {
-                cycle_nodes.insert(node);
-            }
+    unordered_set<uint64_t> cycle_nodes;
+    for (const auto& cycle : cycles) {
+        for (uint64_t node : cycle) {
+            cycle_nodes.insert(node);
         }
     }
 
-    std::cout << "Set set for crispr regions is ";
-    std::cout << cycle_nodes.size() << " nodes" << std::endl;
-
-    #pragma omp parallel for
     for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
         if (sdbg.IsValidEdge(node_id)) {
             // If this node is not in any cycle, invalidate it
@@ -107,40 +97,41 @@ void keep_crispr_regions(
         }
     }
 
-    size_t valid_edge_count = 0;
-    for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
-        if (sdbg.IsValidEdge(node_id)) {
-            valid_edge_count++;
-        }
-    }
-    std::cout << "keep_crispr_regions sdbg has " << valid_edge_count;
-    std::cout << " valid edges remaining" << std::endl;
+    // std::cout << "Set set for crispr regions is ";
+    // std::cout << cycle_nodes.size() << " nodes" << endl;
 
-    sdbg.FreeMultiplicity();
+    // size_t valid_edge_count = 0;
+    // for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
+    //     if (sdbg.IsValidEdge(node_id)) {
+    //         valid_edge_count++;
+    //     }
+    // }
+    // std::cout << "keep_crispr_regions sdbg has " << valid_edge_count;
+    // std::cout << " valid edges remaining" << endl;
 }
 
-std::vector<Graph> divide_graph_into_subgraphs(SDBG& sdbg) {
-    std::vector<Graph> subgraphs;
+vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
+    vector<Graph> subgraphs;
     
     // Find strongly connected components using Tarjan's algorithm
     TarjanSCC tarjan(sdbg);
     auto components = tarjan.find_components();
 
-    std::cout << "Components: [";
-    for (size_t i = 0; i < components.size(); ++i) {
-        std::vector<uint64_t> sorted_component = components[i];
-        std::sort(sorted_component.begin(), sorted_component.end());
-        std::cout << "[";
-        for (size_t j = 0; j < sorted_component.size(); ++j) {
-            std::cout << sorted_component[j];
-            if (j + 1 < sorted_component.size()) std::cout << ",";
-        }
-        std::cout << "]";
-        if (i + 1 < components.size()) std::cout << ", ";
-    }
-    std::cout << "]" << std::endl;
+    // std::cout << "Components: [";
+    // for (size_t i = 0; i < components.size(); ++i) {
+    //     vector<uint64_t> sorted_component = components[i];
+    //     std::sort(sorted_component.begin(), sorted_component.end());
+    //     std::cout << "[";
+    //     for (size_t j = 0; j < sorted_component.size(); ++j) {
+    //         std::cout << sorted_component[j];
+    //         if (j + 1 < sorted_component.size()) std::cout << ",";
+    //     }
+    //     std::cout << "]";
+    //     if (i + 1 < components.size()) std::cout << ", ";
+    // }
+    // std::cout << "]" << endl;
     
-    std::cout << "Found " << components.size() << " strongly connected components" << std::endl;
+    // std::cout << "Found " << components.size() << " strongly connected components" << endl;
     
     // Convert each component to a SubGraph
     for (size_t comp_idx = 0; comp_idx < components.size(); ++comp_idx) {
@@ -148,7 +139,7 @@ std::vector<Graph> divide_graph_into_subgraphs(SDBG& sdbg) {
         Graph subgraph;
         
         // Add all edges within this component
-        for (uint64_t node : component) {
+        for (const uint64_t node : component) {
             if (!sdbg.IsValidEdge(node)) continue;
             
             int outdegree = sdbg.EdgeOutdegree(node);
@@ -156,7 +147,7 @@ std::vector<Graph> divide_graph_into_subgraphs(SDBG& sdbg) {
                 uint64_t* outgoings = new uint64_t[outdegree];
                 if (sdbg.OutgoingEdges(node, outgoings) != -1) {
                     for (int i = 0; i < outdegree; ++i) {
-                        uint64_t neighbor = outgoings[i];
+                        const uint64_t neighbor = outgoings[i];
                         // Only add edge if neighbor is in the same component
                         if (std::find(component.begin(), component.end(), neighbor) != component.end()) {
                             subgraph.add_edge(node, neighbor);
@@ -175,16 +166,23 @@ std::vector<Graph> divide_graph_into_subgraphs(SDBG& sdbg) {
     return subgraphs;
 }
 
-std::vector<Graph> get_crispr_regions(
+vector<Graph> get_crispr_regions(
     SDBG& sdbg,
-    std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles
+    unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
 ) {
+    vector<vector<uint64_t>> cycles;
+    for (const auto& [_start_node, cycles_of_start_node] : cycles_map) {
+        for (const auto& cycle : cycles_of_start_node) {
+            cycles.push_back(cycle);
+        }
+    }
+
     keep_crispr_regions(sdbg, cycles);
     return divide_graph_into_subgraphs(sdbg);
 }
 
-std::vector<Jump> get_relevant_jumps(const Graph& graph, std::vector<Jump>& all_jumps) {
-    std::vector<Jump> relevant_jumps;
+vector<Jump> get_relevant_jumps(const Graph& graph, const vector<Jump>& all_jumps) {
+    vector<Jump> relevant_jumps;
 
     for (const auto& jump : all_jumps) {
         if (graph.nodes.find(jump.start_k_mer_id) != graph.nodes.end() &&
@@ -196,11 +194,11 @@ std::vector<Jump> get_relevant_jumps(const Graph& graph, std::vector<Jump>& all_
     return relevant_jumps;
 }
 
-std::vector<std::vector<uint64_t>> get_relevant_cycles(
+vector<vector<uint64_t>> get_relevant_cycles(
     const Graph& graph,
-    std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& all_cycles_map
+    const unordered_map<uint64_t, vector<vector<uint64_t>>>& all_cycles_map
 ) {
-    std::vector<std::vector<uint64_t>> relevant_cycles;
+    vector<vector<uint64_t>> relevant_cycles;
 
     for (const auto& [_, cycles] : all_cycles_map) {
         for (const auto& cycle : cycles) {
@@ -220,49 +218,53 @@ std::vector<std::vector<uint64_t>> get_relevant_cycles(
     return relevant_cycles;
 }
 
-std::unordered_map<uint64_t, int32_t> get_node_to_cycle_map(std::vector<std::vector<uint64_t>>& cycles) {
-    std::vector<std::unordered_set<uint64_t>> cycle_node_sets;
+unordered_map<uint64_t, uint32_t> get_node_to_unique_cycle_map(
+    const vector<vector<uint64_t>>& cycles
+) {
+    vector<unordered_set<uint64_t>> cycle_node_sets;
     for (const auto& cycle : cycles) {
         cycle_node_sets.emplace_back(cycle.begin(), cycle.end());
     }
 
-    std::unordered_map<uint64_t, int32_t> node_to_cycle_map;
-    for (size_t i = 0; i < cycle_node_sets.size(); ++i) {
+    unordered_map<uint64_t, uint32_t> node_to_cycle_map;
+    for (uint32_t i = 0; i < cycle_node_sets.size(); ++i) {
         // Build union of all other sets
-        std::unordered_set<uint64_t> other_nodes;
-        for (size_t j = 0; j < cycle_node_sets.size(); ++j) {
+        unordered_set<uint64_t> other_nodes;
+        for (uint32_t j = 0; j < cycle_node_sets.size(); ++j) {
             if (j == i) continue;
             other_nodes.insert(cycle_node_sets[j].begin(), cycle_node_sets[j].end());
         }
         // Find unique nodes in cycle i
-        for (uint64_t node : cycle_node_sets[i]) {
+        for (const uint64_t node : cycle_node_sets[i]) {
             if (other_nodes.find(node) == other_nodes.end()) {
-                node_to_cycle_map[node] = static_cast<int32_t>(i);
+                node_to_cycle_map[node] = i;
             }
         }
     }
     return node_to_cycle_map;
 }
 
-std::vector<int32_t> get_all_cycle_indices(
-    std::unordered_map<uint64_t, int32_t> node_to_cycle_map
+vector<uint32_t> get_all_cycle_indices(
+    const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 ) {
-    std::vector<int32_t> cycle_indices;
+    vector<uint32_t> cycle_indices;
+
     for (const auto& [node, cycle_idx] : node_to_cycle_map) {
         if (std::find(cycle_indices.begin(), cycle_indices.end(), cycle_idx) == cycle_indices.end()) {
             cycle_indices.push_back(cycle_idx);
         }
     }
+
     return cycle_indices;
 }
 
-std::vector<std::vector<uint64_t>> find_all_possible_paths(
+vector<vector<uint64_t>> find_all_possible_paths(
     const Graph& graph,
     uint64_t start,
     uint64_t end,
     uint64_t nodes_left
 ) {
-    std::vector<std::vector<uint64_t>> paths;
+    vector<vector<uint64_t>> paths;
 
     if (nodes_left == 0 && start == end) {
         paths.push_back({end});
@@ -287,128 +289,152 @@ std::vector<std::vector<uint64_t>> find_all_possible_paths(
     return paths;
 }
 
-std::vector<std::tuple<uint32_t, uint32_t>> generate_constraints(
+vector<tuple<uint32_t, uint32_t>> every_possible_combination(const vector<uint32_t>& v) {
+    vector<tuple<uint32_t, uint32_t>> possible_combination;
+    
+    for (size_t i = 0; i < v.size(); ++i) {
+        for (size_t j = i + 1; j < v.size(); ++j) {
+            const uint32_t element_i = v[i];
+            const uint32_t element_j = v[j];
+
+            if (element_i != element_j) {
+                possible_combination.push_back(std::make_tuple(
+                    static_cast<uint32_t>(element_i),
+                    static_cast<uint32_t>(element_j)
+                ));
+            }
+        }
+    }
+
+    return possible_combination;
+}
+
+vector<tuple<uint32_t, uint32_t>> generate_constraints_from_jump(
     const Graph& graph,
-    std::vector<Jump>& jumps,
-    std::unordered_map<uint64_t, int32_t>& node_to_cycle_map
+    const Jump& jump,
+    const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 ) {
-    std::vector<std::tuple<uint32_t, uint32_t>> constraints;
+    vector<tuple<uint32_t, uint32_t>> constraints;
+
+    const vector<vector<uint64_t>> all_paths = find_all_possible_paths(
+        graph,
+        jump.start_k_mer_id,
+        jump.end_k_mer_id,
+        jump.nodes_in_between + 1 // + 1, to count the end node as well
+    );
+
+    if (all_paths.empty()) {
+        return constraints;
+    }
+
+    vector<uint32_t> cycle_indices_in_order;
+    // + 2 as start and end nodes are included in the path
+    for (size_t i = 0; i < static_cast<size_t>(jump.nodes_in_between) + 2; ++i) {
+        bool all_nodes_can_be_mapped = true;
+        for (const auto& path : all_paths) {
+            const uint64_t node = path[i];
+            if (node_to_cycle_map.find(node) == node_to_cycle_map.end()) {
+                all_nodes_can_be_mapped = false;
+                break;
+            }
+        }
+
+        if (!all_nodes_can_be_mapped) {
+            continue;
+        }
+
+        bool cycle_index_differs = false;
+        optional<uint32_t> common_cycle_index = std::nullopt;
+        for (const auto& path : all_paths) {
+            const uint64_t node = path[i];
+            const uint32_t cycle_index = node_to_cycle_map.find(node)->second;
+
+            if (common_cycle_index.has_value() && common_cycle_index.value() != cycle_index) {
+                cycle_index_differs = true;
+                break;
+            } else if (!common_cycle_index.has_value()) {
+                common_cycle_index = std::make_optional(cycle_index);
+            }
+        }
+
+        if (cycle_index_differs || !common_cycle_index.has_value()) {
+            continue;
+        }
+
+        cycle_indices_in_order.push_back(common_cycle_index.value());
+    }
+
+    return every_possible_combination(cycle_indices_in_order);
+}
+
+vector<tuple<uint32_t, uint32_t>> generate_constraints(
+    const Graph& graph,
+    const vector<Jump>& jumps,
+    const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
+) {
+    vector<tuple<uint32_t, uint32_t>> constraints;
 
     for (const auto& jump : jumps) {
-        std::vector<std::vector<uint64_t>> all_paths = find_all_possible_paths(
+        const auto jump_constraints = generate_constraints_from_jump(
             graph,
-            jump.start_k_mer_id,
-            jump.end_k_mer_id,
-            jump.nodes_in_between + 1
+            jump,
+            node_to_cycle_map
         );
 
-        if (all_paths.empty()) {
-            continue;
-        }
-
-        std::vector<std::unordered_set<uint64_t>> path_with_cycle_indices;
-        for (int i = 0; i < all_paths[0].size(); ++i) {
-            std::unordered_set<uint64_t> cycle_indices;
-            for (const auto& path : all_paths) {
-                if (i < path.size()) {
-                    uint64_t node = path[i];
-                    auto it = node_to_cycle_map.find(node);
-                    if (it != node_to_cycle_map.end()) {
-                        cycle_indices.insert(it->second);
-                    }
-                }
-            }
-            path_with_cycle_indices.push_back(cycle_indices);
-        }
-
-        std::vector<uint64_t> path_with_unique_cycle_indices;
-        for (const auto& cycle_indices : path_with_cycle_indices) {
-            if (cycle_indices.size() == 1) {
-                path_with_unique_cycle_indices.push_back(*cycle_indices.begin());
-            }
-        }
-
-        if (path_with_unique_cycle_indices.size() < 2) {
-            continue;
-        }
-
-        for (size_t i = 0; i < path_with_unique_cycle_indices.size(); ++i) {
-            for (size_t j = 0; j < path_with_unique_cycle_indices.size(); ++j) {
-                uint32_t element_i = path_with_unique_cycle_indices[i];
-                uint32_t element_j = path_with_unique_cycle_indices[j];
-
-                if (i != j && element_i != element_j) {
-                    constraints.push_back(std::make_tuple(
-                        static_cast<uint32_t>(element_i),
-                        static_cast<uint32_t>(element_j)
-                    ));
-                }
-            }
+        for (const auto& constraint : jump_constraints) {
+            constraints.push_back(constraint);
         }
     }
 
     return constraints;
 }
 
-struct TupleHash {
-    std::size_t operator()(const std::tuple<uint32_t, uint32_t>& t) const {
-        return std::hash<uint32_t>()(std::get<0>(t)) ^ (std::hash<uint32_t>()(std::get<1>(t)) << 1);
-    }
-};
-
-bool has_cycle(std::unordered_map<std::tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights) {
-    // Detect if the directed graph has a cycle using DFS
-    std::unordered_map<uint32_t, std::vector<uint32_t>> adj;
-    for (const auto& [edge, _] : edges_with_weights) {
-        adj[std::get<0>(edge)].push_back(std::get<1>(edge));
-    }
-
-    std::unordered_set<uint32_t> visited;
-    std::unordered_set<uint32_t> rec_stack;
+bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges) {
+    unordered_set<uint32_t> visited;
+    unordered_set<uint32_t> rec_stack;
 
     std::function<bool(uint32_t)> dfs = [&](uint32_t node) {
         if (rec_stack.count(node)) return true;
         if (visited.count(node)) return false;
         visited.insert(node);
         rec_stack.insert(node);
-        for (uint32_t neighbor : adj[node]) {
+        for (uint32_t neighbor : edges.at(node)) {
             if (dfs(neighbor)) return true;
         }
         rec_stack.erase(node);
         return false;
     };
 
-    for (const auto& [node, _] : adj) {
+    for (const auto& [node, _] : edges) {
         if (dfs(node)) return true;
     }
     return false;
 }
 
-// Returns the edge with the smalles value = {edges_occurence_count_in_cycles} * {edge_weight}
-std::tuple<uint32_t, uint32_t> resolve_cycles_greedy_best_edge(
-    std::unordered_map<std::tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights,
-    std::vector<std::vector<uint64_t>>& cycles
+tuple<uint32_t, uint32_t> resolve_cycles_greedy_best_edge(
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights,
+    const vector<vector<uint64_t>>& cycles
 ) {
     // Count edge occurrences in cycles
-    std::unordered_map<std::tuple<uint32_t, uint32_t>, int, TupleHash> edge_occurence_count_in_cycles;
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edge_occurence_count_in_cycles;
     for (const auto& cycle : cycles) {
         for (size_t i = 0; i + 1 < cycle.size(); ++i) {
             uint32_t from = static_cast<uint32_t>(cycle[i]);
             uint32_t to = static_cast<uint32_t>(cycle[i + 1]);
-            std::tuple<uint32_t, uint32_t> edge(from, to);
+            tuple<uint32_t, uint32_t> edge(from, to);
             edge_occurence_count_in_cycles[edge]++;
         }
         // If cycle is closed, add edge from last to first
         if (!cycle.empty()) {
             uint32_t from = static_cast<uint32_t>(cycle.back());
             uint32_t to = static_cast<uint32_t>(cycle.front());
-            std::tuple<uint32_t, uint32_t> edge(from, to);
+            tuple<uint32_t, uint32_t> edge(from, to);
             edge_occurence_count_in_cycles[edge]++;
         }
     }
 
     // Find edge with minimal value = edge_weight * edge_occurence_count_in_cycles
-    std::tuple<uint32_t, uint32_t> best_edge;
+    tuple<uint32_t, uint32_t> best_edge;
     int min_value = std::numeric_limits<int>::max();
     for (const auto& [edge, weight] : edges_with_weights) {
         int occur = edge_occurence_count_in_cycles[edge];
@@ -418,63 +444,73 @@ std::tuple<uint32_t, uint32_t> resolve_cycles_greedy_best_edge(
             best_edge = edge;
         }
     }
+
     return best_edge;
 }
 
 void resolve_cycles_greedy(
-    std::vector<std::tuple<uint32_t, uint32_t>>& constraints,
-    std::vector<std::vector<uint64_t>>& cycles
+    vector<tuple<uint32_t, uint32_t>>& constraints,
+    const vector<vector<uint64_t>>& cycles
 ) {
-    std::unordered_map<std::tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
+    unordered_map<uint32_t, vector<uint32_t>> edges;
     for (const auto& constraint : constraints) {
         edges_with_weights[constraint]++;
+
+        uint32_t from = std::get<0>(constraint);
+        uint32_t to = std::get<1>(constraint);
+        edges[from].push_back(to);
     }
 
-    std::vector<std::tuple<uint32_t, uint32_t>> removed_edges;
+    vector<tuple<uint32_t, uint32_t>> removed_edges;
 
-    while (has_cycle(edges_with_weights)) {
+    while (has_cycle(edges)) {
         auto edge_to_remove = resolve_cycles_greedy_best_edge(edges_with_weights, cycles);
         removed_edges.push_back(edge_to_remove);
         edges_with_weights.erase(edge_to_remove);
-        // std::cout << "Removed edge: (" << std::get<0>(edge_to_remove) << ", " << std::get<1>(edge_to_remove) << ")" << std::endl;
     }
 
-    // Remove constraints that were removed
-    std::vector<std::tuple<uint32_t, uint32_t>> filtered_constraints;
-    std::unordered_set<std::tuple<uint32_t, uint32_t>, TupleHash> removed_set(removed_edges.begin(), removed_edges.end());
+    const unordered_set<tuple<uint32_t, uint32_t>, TupleHash> removed_set(
+        removed_edges.begin(),
+        removed_edges.end()
+    );
+    
+    vector<tuple<uint32_t, uint32_t>> filtered_constraints;
     for (const auto& constraint : constraints) {
         if (removed_set.find(constraint) == removed_set.end()) {
             filtered_constraints.push_back(constraint);
         }
     }
+
     constraints = std::move(filtered_constraints);
 }
 
-// Helper function to perform all possible topological sorts
 void apply_topological_sort(
-    std::vector<int32_t>& possible_start_nodes,
-    std::unordered_map<int32_t, std::vector<int32_t>>& edges,
-    int32_t& possible_choices,
-    std::vector<int32_t>& total_order
+    const vector<uint32_t>& possible_start_nodes,
+    const unordered_map<uint32_t, vector<uint32_t>>& edges,
+    uint32_t& possible_choices,
+    vector<uint32_t>& total_order
 ) {
     if (possible_start_nodes.empty()) {
         return;
     }
 
-    // for (size_t idx = 0; idx < possible_start_nodes.size(); ++idx) {
-    std::vector<int32_t> new_possible_start_nodes = possible_start_nodes;
-    std::unordered_map<int32_t, std::vector<int32_t>> new_edges = edges;
+    vector<uint32_t> new_possible_start_nodes = possible_start_nodes;
+    unordered_map<uint32_t, vector<uint32_t>> new_edges = edges;
     
-    int32_t start_node = new_possible_start_nodes[0];
+    // Choose some start_node
+    uint32_t start_node = new_possible_start_nodes[0];
     possible_choices *= new_possible_start_nodes.size();
     total_order.push_back(start_node);
 
+    // Remove the start_node as choosable
     new_possible_start_nodes.erase(
         std::remove(new_possible_start_nodes.begin(), new_possible_start_nodes.end(), start_node),
         new_possible_start_nodes.end()
     );
 
-    std::vector<int32_t> start_node_candidates;
+    // Removes every edge containing the start_node
+    vector<uint32_t> start_node_candidates;
     auto it = new_edges.find(start_node);
     if (it != new_edges.end()) {
         for (const auto& node : it->second) {
@@ -491,6 +527,8 @@ void apply_topological_sort(
             ++it;
         }
     }
+
+    // Finding new possible start nodes
     for (const auto& start_node_candidate : start_node_candidates) {
         bool has_other_incoming = false;
         for (const auto& edge : new_edges) {
@@ -506,26 +544,17 @@ void apply_topological_sort(
     }
 
     apply_topological_sort(new_possible_start_nodes, new_edges, possible_choices, total_order);
-    
-    // for (const auto& solution_rec : solutions_rec) {
-    //     std::vector<int32_t> solution = solution_rec;
-    //     solution.insert(solution.begin(), start_node);
-    //     result.push_back(solution);
-    // }
-    // }
 }
 
-std::vector<int32_t> solve_constraints_with_topological_sort(
-    std::vector<std::tuple<uint32_t, uint32_t>>& constraints,
-    std::vector<int32_t>& nodes,
+vector<uint32_t> solve_constraints_with_topological_sort(
+    const vector<tuple<uint32_t, uint32_t>>& constraints,
+    const vector<uint32_t>& nodes,
     float& confidence
 ) {
-    // Build edges map
-    std::unordered_map<int32_t, std::vector<int32_t>> edges;
-    // std::unordered_set<int32_t> node_set;
+    unordered_map<uint32_t, vector<uint32_t>> edges;
     for (const auto& constraint : constraints) {
-        int32_t source = static_cast<int32_t>(std::get<0>(constraint));
-        int32_t dest = static_cast<int32_t>(std::get<1>(constraint));
+        uint32_t source = static_cast<uint32_t>(std::get<0>(constraint));
+        uint32_t dest = static_cast<uint32_t>(std::get<1>(constraint));
         auto it = edges.find(source);
         if (it != edges.end()) {
             if (std::find(it->second.begin(), it->second.end(), source) == it->second.end()) {
@@ -534,14 +563,11 @@ std::vector<int32_t> solve_constraints_with_topological_sort(
         } else {
             edges[source] = {dest};
         }
-        // node_set.insert(source);
-        // node_set.insert(dest);
     }
-    // std::vector<int32_t> nodes(node_set.begin(), node_set.end());
 
     // Find possible start nodes (nodes with no incoming edges)
-    std::vector<int32_t> possible_start_nodes;
-    for (int32_t node : nodes) {
+    vector<uint32_t> possible_start_nodes;
+    for (uint32_t node : nodes) {
         bool has_incoming = false;
         for (const auto& constraint : constraints) {
             if (std::get<1>(constraint) == node) {
@@ -554,55 +580,57 @@ std::vector<int32_t> solve_constraints_with_topological_sort(
         }
     }
 
-    std::cout << "Node set: ";
-    for (const auto& node : nodes) {
-        std::cout << node << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "Node set: ";
+    // for (const auto& node : nodes) {
+    //     std::cout << node << " ";
+    // }
+    // std::cout << endl;
 
-    std::vector<int32_t> total_order;
-    int32_t possible_choices = 1;
+    vector<uint32_t> total_order;
+    uint32_t possible_choices = 1;
     apply_topological_sort(possible_start_nodes, edges, possible_choices, total_order);
 
     confidence = 1.0f / possible_choices;
 
-    // std::cout << "All possible topological orders:" << std::endl;
+    // std::cout << "All possible topological orders:" << endl;
     // for (const auto& order : all_orders) {
     //     std::cout << "[ ";
     //     for (size_t i = 0; i < order.size(); ++i) {
     //         std::cout << order[i];
     //         if (i + 1 < order.size()) std::cout << ", ";
     //     }
-    //     std::cout << " ]" << std::endl;
+    //     std::cout << " ]" << endl;
     // }
 
     return total_order;
 }
 
-std::vector<int32_t> order_cycles(
+vector<uint32_t> order_cycles(
     const Graph& graph,
-    std::vector<Jump>& jumps,
-    std::vector<std::vector<uint64_t>>& cycles,
+    const vector<Jump>& jumps,
+    const vector<vector<uint64_t>>& cycles,
     float& confidence
 ) {
-    auto node_to_cycle_map = get_node_to_cycle_map(cycles);
-    auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
+    const auto node_to_cycle_map = get_node_to_unique_cycle_map(cycles);
+    const auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
     auto constraints = generate_constraints(graph, jumps, node_to_cycle_map);
-    std::cout << "Constraints before resolving cycles: " << constraints.size() << std::endl;
+    std::cout << "Constraints before resolving cycles: " << constraints.size() << endl;
     resolve_cycles_greedy(constraints, cycles);
-    std::cout << "Constraints after resolving cycles: " << constraints.size() << std::endl;
+    std::cout << "Constraints after resolving cycles: " << constraints.size() << endl;
     return solve_constraints_with_topological_sort(constraints, all_cycle_indices, confidence);
 }
 
-std::vector<uint64_t> turn_cycle_order_into_node_order(
-    std::vector<int32_t>& cycle_order,
-    std::vector<std::vector<uint64_t>>& cycles
+vector<uint64_t> turn_cycle_order_into_node_order(
+    const vector<uint32_t>& cycle_order,
+    const vector<vector<uint64_t>>& cycles
 ) {
-    std::vector<uint64_t> node_order;
+    vector<uint64_t> node_order;
 
     for (const auto& cycle_index : cycle_order) {
-        for (const auto& node_id : cycles[cycle_index]) {
-            node_order.push_back(node_id);
+        if (cycle_index < cycles.size()) {
+            for (const auto& node_id : cycles[cycle_index]) {
+                node_order.push_back(node_id);
+            }
         }
     }
 

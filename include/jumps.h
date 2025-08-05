@@ -80,7 +80,7 @@ vector<string> extract_sequences_from_fastq_file(const string& fastq_file_path);
 string reverse_pair_ends_sequence(string sequence);
 
 /**
- * @internal INTERNAL STUFF
+ * @internal
  * @brief Try to create a jump from a sequence using the kmer to node map
  * 
  * @param sequence The sequence from which the jump shall be constructed
