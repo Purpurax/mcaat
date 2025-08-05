@@ -1,3 +1,20 @@
+/**
+ * @file spacer_ordering.h
+ * @brief Functions for ordering cycles and regions in Succinct De Bruijn Graphs (SDBG).
+ *
+ * Contains:
+ * - Graph structure for basic graph operations.
+ * - Functions to extract and order cycles and regions from SDBG.
+ * - Functions to get relevant jumps and cycles.
+ * - Functions to combine cycles into ordered node sequences.
+ *
+ * Main public functions:
+ * - get_crispr_regions
+ * - get_relevant_jumps
+ * - get_relevant_cycles
+ * - order_cycles
+ * - turn_cycle_order_into_node_order
+ */
 #ifndef INCLUDE_SPACER_ORDERING_H_
 #define INCLUDE_SPACER_ORDERING_H_
 
@@ -17,10 +34,29 @@ struct Graph {
     unordered_map<uint64_t, vector<uint64_t>> adjacency_list;
     unordered_set<uint64_t> nodes;
 
+    /**
+     * @brief Adds a new edge to the graph
+     * 
+     * @param from
+     * @param to
+     */
     void add_edge(uint64_t from, uint64_t to) {
         adjacency_list[from].push_back(to);
         nodes.insert(from);
         nodes.insert(to);
+    }
+
+    /**
+     * @brief Returns the total number of edges in the graph
+     *
+     * @return The edge count (size_t)
+     */
+    size_t edge_count() const {
+        size_t count = 0;
+        for (const auto& kv : adjacency_list) {
+            count += kv.second.size();
+        }
+        return count;
     }
 };
 

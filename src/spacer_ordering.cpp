@@ -398,8 +398,11 @@ bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges) {
         if (visited.count(node)) return false;
         visited.insert(node);
         rec_stack.insert(node);
-        for (uint32_t neighbor : edges.at(node)) {
-            if (dfs(neighbor)) return true;
+        auto it = edges.find(node);
+        if (it != edges.end()) {
+            for (uint32_t neighbor : it->second) {
+                if (dfs(neighbor)) return true;
+            }
         }
         rec_stack.erase(node);
         return false;
@@ -468,6 +471,17 @@ void resolve_cycles_greedy(
         auto edge_to_remove = resolve_cycles_greedy_best_edge(edges_with_weights, cycles);
         removed_edges.push_back(edge_to_remove);
         edges_with_weights.erase(edge_to_remove);
+        
+        uint32_t from = std::get<0>(edge_to_remove);
+        uint32_t to = std::get<1>(edge_to_remove);
+        auto it = edges.find(from);
+        if (it != edges.end()) {
+            auto& vec = it->second;
+            vec.erase(std::remove(vec.begin(), vec.end(), to), vec.end());
+            if (vec.empty()) {
+                edges.erase(it);
+            }
+        }
     }
 
     const unordered_set<tuple<uint32_t, uint32_t>, TupleHash> removed_set(
@@ -614,9 +628,14 @@ vector<uint32_t> order_cycles(
     const auto node_to_cycle_map = get_node_to_unique_cycle_map(cycles);
     const auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
     auto constraints = generate_constraints(graph, jumps, node_to_cycle_map);
-    std::cout << "Constraints before resolving cycles: " << constraints.size() << endl;
+
+    std::cout << "      ▸ " << constraints.size() << " constraints derived" << std::endl;
+
     resolve_cycles_greedy(constraints, cycles);
-    std::cout << "Constraints after resolving cycles: " << constraints.size() << endl;
+
+    std::cout << "      ▸ " << constraints.size();
+    std::cout << " constraints remain after resolving cycles" << endl;
+
     return solve_constraints_with_topological_sort(constraints, all_cycle_indices, confidence);
 }
 
