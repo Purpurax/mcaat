@@ -51,12 +51,19 @@ endif()
 
 # Include directories
 include_directories(include)
+include_directories(tests)
 
 add_subdirectory(libs/cft)
 include_directories(libs/cft/src)
+
+add_subdirectory(libs/googletest)
+include_directories(libs/googletest/googletest/include)
+
 add_subdirectory(libs/kseqpp)
 include_directories(libs/kseqpp/include)
+
 include_directories(libs/megahit/src)
+
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
 include_directories(${phmap_SOURCE_DIR})
@@ -72,7 +79,10 @@ FetchContent_MakeAvailable(fmt)
 
 # Source files
 file(GLOB_RECURSE MAIN_SOURCE "src/*.cpp")
+file(GLOB_RECURSE SOURCES_WITHOUT_MAIN "src/*.cpp")
+list(REMOVE_ITEM SOURCES_WITHOUT_MAIN "${CMAKE_SOURCE_DIR}/src/main.cpp")
 file(GLOB_RECURSE INCLUDES "include/*.h")
+file(GLOB_RECURSE TESTS_SOURCE "tests/*.cpp")
 file(GLOB_RECURSE ASMBL_SOURCE "libs/megahit/src/assembly/*.cpp")
 file(GLOB_RECURSE LCASM_SOURCE "libs/megahit/src/localasm/*.cpp")
 file(GLOB_RECURSE IDBA_SOURCE "libs/megahit/src/idba/*.cpp")
@@ -98,6 +108,21 @@ list(APPEND SOME_OTHERS libs/megahit/src/utils/options_description.cpp)
 if (STATIC_BUILD)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif (STATIC_BUILD)
+
+# Testing
+enable_testing()
+set(TEST_IMPL_SOURCES
+    ${SOURCES_WITHOUT_MAIN}
+    ${ASMBL_SOURCE}
+    ${IDBA_SOURCE}
+    ${SDBG_SOURCE}
+    ${LCASM_SOURCE}
+    ${SEQ_SOURCE}
+    ${CX1_SOURCE}
+    ${TOOLKIT_SOURCE}
+    ${PROGRESSBAR_SOURCE}
+    ${SOME_OTHERS}
+)
 
 # Compiler and linker flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
@@ -171,3 +196,19 @@ if (DOXYGEN_FOUND)
 else()
     message(STATUS "Doxygen not found, 'doc' target will not be available.")
 endif()
+
+# Testing
+# if (UNIT_TESTS)
+add_executable(runTests ${TESTS_SOURCE} ${TEST_IMPL_SOURCES})
+
+target_link_libraries(runTests
+    gtest
+    gtest_main
+    ${ZLIB_LIBRARIES}
+    pthread
+    fmt::fmt
+)
+
+include(GoogleTest)
+gtest_discover_tests(runTests)
+# endif()
