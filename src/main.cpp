@@ -495,17 +495,45 @@ int main(int argc, char** argv) {
     
     cout << "  ▸ Splitting into subproblems" << endl;
     auto subgraphs = get_crispr_regions(sdbg, cycles_map);
-    
-    cout << "  🔄 Repeating for " << subgraphs.size();
-    cout << " subproblems..." << endl;
-    unordered_map<string, vector<string>> ALL_SYSTEMS;
+
+    cout << "  🔄 Filtering subproblems:" << endl;
+    vector<Graph> remaining_subgraphs;
+    vector<vector<Jump>> remaining_jumps;
+    vector<vector<vector<size_t>>> remaining_cycles;
     for (size_t idx = 0; idx < subgraphs.size(); ++idx) {
         const auto& subgraph = subgraphs[idx];
         auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
         
+        // This decision was made because of how megahit is assembling the de bruijn graph
+        //  Instead of creating an accurate graph, the assembly might create nodes multiple
+        //  times and thereby some crispr arrays might be duplicates
+        //  By testing the example data of latilactobacillus_sakei, which has exactly
+        //  one crispr array, it lead to one valid subproblem and one in which no
+        //  relevant jump was found.
+        //  => Filter the case out, as we assume this is a duplicate problem
+        if (relevant_jumps.size() == 0 || relevant_cycles.size() < 3) {
+            continue;
+        }
+
+        remaining_subgraphs.push_back(subgraph);
+        remaining_jumps.push_back(relevant_jumps);
+        remaining_cycles.push_back(relevant_cycles);
+    }
+    cout << "  ✅ " << remaining_subgraphs.size() << "/";
+    cout << subgraphs.size() << " subproblems remaining" << endl;
+
+    
+    cout << "  🔄 Solving " << remaining_subgraphs.size();
+    cout << " subproblems..." << endl;
+    unordered_map<string, vector<string>> ALL_SYSTEMS;
+    for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
+        const auto& subgraph = remaining_subgraphs[idx];
+        const auto& relevant_jumps = remaining_jumps[idx];
+        const auto& relevant_cycles = remaining_cycles[idx];
+        
         cout << "    Subproblem " << idx + 1 << "/";
-        cout << subgraphs.size() << ":" << endl;
+        cout << remaining_subgraphs.size() << ":" << endl;
         
         cout << "      🛈 Graph with " << subgraph.nodes.size();
         cout << " nodes and " << subgraph.edge_count() << " edges" << endl;

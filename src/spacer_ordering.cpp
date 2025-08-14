@@ -514,7 +514,12 @@ void apply_topological_sort(
     
     // Choose some start_node
     uint32_t start_node = new_possible_start_nodes[0];
-    possible_choices *= new_possible_start_nodes.size();
+    if (new_possible_start_nodes.size() > 0
+    && possible_choices > std::numeric_limits<uint32_t>::max() - new_possible_start_nodes.size() + 1) {
+        possible_choices = std::numeric_limits<uint32_t>::max();
+    } else {
+        possible_choices += static_cast<uint32_t>(new_possible_start_nodes.size()) - 1;
+    }
     total_order.push_back(start_node);
 
     // Remove the start_node as choosable
@@ -567,12 +572,12 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 ) {
     unordered_map<uint32_t, vector<uint32_t>> edges;
     for (const auto& constraint : constraints) {
-        uint32_t source = static_cast<uint32_t>(std::get<0>(constraint));
-        uint32_t dest = static_cast<uint32_t>(std::get<1>(constraint));
+        uint32_t source = std::get<0>(constraint);
+        uint32_t dest = std::get<1>(constraint);
         auto it = edges.find(source);
         if (it != edges.end()) {
-            if (std::find(it->second.begin(), it->second.end(), source) == it->second.end()) {
-            it->second.push_back(dest);
+            if (std::find(it->second.begin(), it->second.end(), dest) == it->second.end()) {
+                it->second.push_back(dest);
             }
         } else {
             edges[source] = {dest};
@@ -603,8 +608,13 @@ vector<uint32_t> solve_constraints_with_topological_sort(
     vector<uint32_t> total_order;
     uint32_t possible_choices = 1;
     apply_topological_sort(possible_start_nodes, edges, possible_choices, total_order);
-
-    confidence = 1.0f / possible_choices;
+    std::cout << "      ▸ The amount of possible choices for the order is ";
+    std::cout << possible_choices << std::endl;
+    if (possible_choices == 0) {
+        confidence = 1.0f;
+    } else {
+        confidence = 1.0f / possible_choices;
+    }
 
     // std::cout << "All possible topological orders:" << endl;
     // for (const auto& order : all_orders) {
