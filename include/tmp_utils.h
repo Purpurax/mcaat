@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "settings.h"
+#include <sdbg/sdbg.h>
 
 using namespace std;
 
@@ -51,5 +52,12 @@ pair<string, optional<string>> get_fastq_files_from_settings(
 size_t get_cycle_count(
     const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
 );
+
+/**
+ * @brief Loads in the sdbg graph and prints the nodes and edges as dot file
+ * 
+ * @param lib_file_path The folder in which the files are contained (data.lib, graph.sdbg.0, ..., graph.sdbg_info)
+ */
+void print_sdbg_graph_to_dot_file_convert(const string& lib_file_path);
 
 #endif
