@@ -16,6 +16,7 @@ option(COVERAGE "Generate coverage report" ON)
 option(STATIC_BUILD "Build static executation" OFF)
 option(SANITIZER "Enable sanitizers" OFF)
 option(TSAN "Enable thread sanitizers" OFF)
+option(DEVELOP "Enable development features (JSON, debug, etc)" OFF)
 
 # Include directories
 include_directories(include)
@@ -78,12 +79,30 @@ if (STATIC_BUILD)
 endif (STATIC_BUILD)
 
 # Link libraries
-target_link_libraries(mcaat ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz)
+target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz)
 
 # Threading configuration
 if(THREADS_HAVE_PTHREAD_ARG)
     target_compile_options(mcaat PUBLIC "-pthread")
 endif()
 if(CMAKE_THREAD_LIBS_INIT)
-    target_link_libraries(mcaat "${CMAKE_THREAD_LIBS_INIT}")
+    target_link_libraries(mcaat PRIVATE "${CMAKE_THREAD_LIBS_INIT}")
+endif()
+
+if(DEVELOP)
+    # Download and add nlohmann_json (header-only)
+    include(FetchContent)
+    FetchContent_Declare(
+        json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+    )
+    FetchContent_GetProperties(json)
+    if(NOT json_POPULATED)
+        FetchContent_Populate(json)
+        include_directories(${json_SOURCE_DIR})
+    endif()
+    add_subdirectory(${json_SOURCE_DIR} ${json_BINARY_DIR})
+    target_link_libraries(mcaat PRIVATE nlohmann_json::nlohmann_json)
+    target_compile_definitions(mcaat PRIVATE DEVELOP)
 endif()

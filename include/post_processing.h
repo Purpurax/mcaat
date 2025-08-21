@@ -51,7 +51,7 @@ public:
         }
 
         std::vector<std::string> common;
-        int threshold = sequences.size() * 0.79;
+        int threshold = sequences.size() * 0.75;
         for (const auto& pair : count) {
             if (pair.second >= threshold) {
                 common.push_back(pair.first);

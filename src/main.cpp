@@ -23,7 +23,9 @@
 #elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #endif
-
+#ifdef DEVELOP
+#include "io_ops.h"
+#endif
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -215,7 +217,6 @@ Settings parse_arguments(int argc, char* argv[]) {
     return settings;
 }
 
-
 string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
     std::string label;            
     uint8_t seq[sdbg.k()];
@@ -274,21 +275,34 @@ int main(int argc, char** argv) {
     cout << "Number of nodes in results: " << cycles.size() << endl;
     // %% FBCE ALGORITHM %%
     
-    int number_of_spacers = 0;
-    // %% FILTERS %%
-    cout << "FILTERS START:" << endl;
-    Filters filters(sdbg, cycles);
-    auto  SYSTEMS = filters.ListArrays(number_of_spacers);
-    cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
-    // %% FILTERS %%
-    //%% POST PROCESSING %%
-    cout << "POST PROCESSING START:" << endl;
-    CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
-    analyzer.run_analysis();
-    cout << "Saved in: " << settings.output_file << endl;
+    // ############ DEVELOPMENT ############
+
+    #ifdef DEVELOP
+    //IOOperations::read_cycles("cycles.json");
+    IOOperations::write_cycles("out.json", cycles);
+    #endif
+
+    // ############ DEVELOPMENT ############
+
+
+    // int number_of_spacers = 0;
+    // // %% FILTERS %%
+    // cout << "FILTERS START:" << endl;
+    // Filters filters(sdbg, cycles);
+    // auto  SYSTEMS = filters.ListArrays(number_of_spacers);
+    // cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
+    // // %% FILTERS %%
+
+
+
+    // //%% POST PROCESSING %%
+    // cout << "POST PROCESSING START:" << endl;
+    // CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
+    // analyzer.run_analysis();
+    // cout << "Saved in: " << settings.output_file << endl;
     //%% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    fs::remove_all(graph_folder_old);
+    //fs::remove_all(graph_folder_old);
     // %% DELETE THE GRAPH FOLDER %%            
 }

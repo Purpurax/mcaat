@@ -18,90 +18,6 @@
  * - Finding all cycles in the graph by iterating over chunked start nodes and utilizing parallel processing.
  */
 
-// @brief Writes the start nodes to a file - developer function
-void CycleFinder::_WriteStartNodesToFile(const map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked, const std::string& filename) {
-    std::ofstream outfile(filename);
-
-    if (!outfile.is_open()) {
-        std::cerr << "Failed to open file for writing: " << filename << std::endl;
-        return;
-    }
-
-    for (const auto& [key, value] : start_nodes_chunked) {
-        outfile << "log2_mult: " << key << " Number of nodes: " << value.size() << endl;
-        for (const auto& node : value) {
-            outfile << node << endl;
-        }
-    }
-
-    outfile.close();
-}
-// @brief Reads the start nodes to a file - developer function
-void CycleFinder::_ReadStartNodesFromFile(map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked, const std::string& filename) {
-    std::ifstream file(filename);
-    if (!file) {
-        std::cerr << "Error opening file!" << std::endl;
-        return;
-    }
-    
-    std::string line;
-    int currentKey = 0;
-    
-    while (std::getline(file, line)) {
-        if (line.empty()) continue;
-        
-        if (line.back() == ':') {
-            line.pop_back(); // Remove the colon
-            currentKey = std::stoi(line);
-            start_nodes_chunked[currentKey] = {}; // Initialize the vector
-        } else {
-            uint64_t value = std::stoull(line);
-            start_nodes_chunked[currentKey].push_back(value);
-        }
-    }
-    
-    file.close();
-    
-}
-// @brief Writes the cycles to a file - developer function
-void CycleFinder::_WriteMapToFile(const std::unordered_map<uint64_t,  std::vector<std::vector<uint64_t>>>& cycles, const std::string& filename) {
-    std::ofstream outfile(filename);
-
-    if (!outfile.is_open()) {
-        std::cerr << "Failed to open file for writing: " << filename << std::endl;
-        return;
-    }
-
-    for (const auto& pair : cycles) {
-        uint64_t key = pair.first;
-        const std::vector<std::vector<uint64_t>>& nested_vectors = pair.second;
-
-        // Write the key
-        outfile << key << ":";
-
-        // Write the nested vectors
-        for (size_t i = 0; i < nested_vectors.size(); ++i) {
-            const std::vector<uint64_t>& vec = nested_vectors[i];
-            
-            outfile << "[";
-            for (size_t j = 0; j < vec.size(); ++j) {
-                outfile << vec[j];
-                if (j < vec.size() - 1) {
-                    outfile << ",";
-                }
-            }
-            outfile << "]";
-            
-            if (i < nested_vectors.size() - 1) {
-                outfile << ";"; // Separate nested vectors with a semicolon
-            }
-        }
-
-        outfile << std::endl; // Newline to separate entries
-    }
-
-    outfile.close();
-}
 
 /**
  * @brief Checks if any incoming edge of a node is not equal to the node itself.
@@ -394,7 +310,7 @@ void CycleFinder::InvalidateMultiplicityOneNodes() {
 size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked) {
     uint64_t loaded = 0;
     const int chunk_size = 20000;
-    this->InvalidateMultiplicityOneNodes();
+    //this->InvalidateMultiplicityOneNodes();
     #pragma omp parallel num_threads(this->threads_count)
     {
         #pragma omp for schedule(dynamic, chunk_size)
@@ -403,7 +319,7 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
                 size_t edge_outdegree = this->sdbg.EdgeOutdegree(node);
                 loaded+=1; 
                 if(loaded % 10000000 == 0) std::cout << "Loaded " << loaded << " nodes\n";
-                if (edge_indegree >= 2 && this->sdbg.EdgeMultiplicity(node) > 19)
+                if (edge_indegree >= 2 && this->sdbg.EdgeMultiplicity(node) > 5)
                 {
                     
                     if(this->_IncomingNotEqualToCurrentNode(node,edge_indegree)) continue;
@@ -448,10 +364,7 @@ int CycleFinder::FindApproximateCRISPRArrays()
         }
     }
     */
-    //pause
-    std::cout << "Recursive Reduction Ignored\n";
-    //std::cout<<" Number of invalid edges " << invalid_edges << endl;
-    //cin.get();
+    
     struct mallinfo mem_info = mallinfo();
     size_t graph_mem_info = mem_info.uordblks;
     int cumulative = 0;
@@ -483,16 +396,12 @@ int CycleFinder::FindApproximateCRISPRArrays()
                 std::cout << n_th_counter << " 100k nodes\n";
             }
         }
-        
         malloc_trim(0);
         std::cout << "processed " << nodes_iterator->second.size() << " with ";
-        //nodes_iterator = start_nodes_chunked.erase(nodes_iterator);
         printf("Cycles: %d\n", cumulative);
     }
     std::cout << "Number of cycles: " << cumulative << endl;
-    // std::cout number of nodes in results
     std::cout << "Number of nodes in results: " << this->results.size() << endl;
-    //writeMapToFile(this->results, "results.txt");
 
     std::cout << endl;
     std::cout << "Number of Cycles: " << cumulative << endl;
