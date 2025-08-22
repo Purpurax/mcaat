@@ -1,7 +1,7 @@
 #include "io_ops.h"
 #ifdef DEVELOP
 
-std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> IOOperations::read_cycles(const std::string& file_path) {
+std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> io_ops::read_cycles(const std::string& file_path) {
     std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> cycles;
     std::ifstream file(file_path);
     if (!file.is_open()) {
@@ -23,7 +23,7 @@ std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> IOOperations::r
     return cycles;
 }
 
-void IOOperations::write_cycles(const std::string& file_path, const std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles) {
+void io_ops::write_cycles(const std::string& file_path, const std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles) {
     json j;
     for (const auto& [cycle_id, cycle_vec] : cycles) {
         j[std::to_string(cycle_id)] = cycle_vec;
@@ -38,7 +38,7 @@ void IOOperations::write_cycles(const std::string& file_path, const std::unorder
 }
 
 
-void IOOperations::write_nodes_gfa(const std::string& file_path, const SDBG& sdbg) {
+void io_ops::write_nodes_gfa(const std::string& file_path, const SDBG& sdbg) {
     std::ofstream file(file_path);
     if (!file.is_open()) {
         std::cerr << "Error opening GFA file: " << file_path << std::endl;

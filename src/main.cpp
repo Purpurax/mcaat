@@ -260,9 +260,15 @@ int main(int argc, char** argv) {
     cout << "Graph folder: " << cstr << endl;
     sdbg.LoadFromFile(cstr);
     cout << "Loaded the graph" << endl;
-
+    string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
+    uint8_t end_seq[24];
+    for (int i = 0; i < 23; ++i) {
+        end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
+    }
+    int64_t end_node = sdbg.IndexBinarySearch(end_seq);
     // %% LOAD GRAPH %%
-    
+    cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
+
     delete[] cstr;
 
     
@@ -270,6 +276,7 @@ int main(int argc, char** argv) {
     cout << "FBCE START:" << endl;
     auto start_time = chrono::high_resolution_clock::now();
     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
+    
     int number_of_spacers_total = 0;
     auto cycles = cycle_finder.results;
     cout << "Number of nodes in results: " << cycles.size() << endl;
@@ -278,8 +285,9 @@ int main(int argc, char** argv) {
     // ############ DEVELOPMENT ############
 
     #ifdef DEVELOP
-    //IOOperations::read_cycles("cycles.json");
-    IOOperations::write_cycles("out.json", cycles);
+    //io_ops::read_cycles("cycles.json");
+    io_ops::write_cycles("out.json", cycles);
+    io_ops::write_nodes_gfa("out.gfa", sdbg);
     #endif
 
     // ############ DEVELOPMENT ############

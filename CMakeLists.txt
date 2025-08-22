@@ -13,7 +13,7 @@ find_package(Threads REQUIRED)
 
 # Options
 option(COVERAGE "Generate coverage report" ON)
-option(STATIC_BUILD "Build static executation" OFF)
+option(STATIC_BUILD "Build static execution" OFF)
 option(SANITIZER "Enable sanitizers" OFF)
 option(TSAN "Enable thread sanitizers" OFF)
 option(DEVELOP "Enable development features (JSON, debug, etc)" OFF)
@@ -54,7 +54,6 @@ if (STATIC_BUILD)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif (STATIC_BUILD)
 
-
 # Compiler and linker flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
@@ -70,7 +69,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -ggdb -O1 -D_LIBCPP_DEBUG -D_GLIBCXX_DEBUG")
 
 # Add executable
 add_executable(mcaat ${MAIN_SOURCE} ${ASMBL_SOURCE} ${IDBA_SOURCE} ${SDBG_SOURCE} ${LCASM_SOURCE}
-    ${SEQ_SOURCE} ${CX1_SOURCE} ${TOOLKIT_SOURCE} ${SOME_OTHERS} )
+    ${SEQ_SOURCE} ${CX1_SOURCE} ${TOOLKIT_SOURCE} ${SOME_OTHERS})
 
 # Static build linker flags
 if (STATIC_BUILD)
@@ -89,20 +88,15 @@ if(CMAKE_THREAD_LIBS_INIT)
     target_link_libraries(mcaat PRIVATE "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
+# Development features
 if(DEVELOP)
-    # Download and add nlohmann_json (header-only)
     include(FetchContent)
     FetchContent_Declare(
         json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
         GIT_TAG v3.11.3
     )
-    FetchContent_GetProperties(json)
-    if(NOT json_POPULATED)
-        FetchContent_Populate(json)
-        include_directories(${json_SOURCE_DIR})
-    endif()
-    add_subdirectory(${json_SOURCE_DIR} ${json_BINARY_DIR})
+    FetchContent_MakeAvailable(json)
     target_link_libraries(mcaat PRIVATE nlohmann_json::nlohmann_json)
     target_compile_definitions(mcaat PRIVATE DEVELOP)
 endif()

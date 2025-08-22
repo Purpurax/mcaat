@@ -12,7 +12,7 @@
 using json = nlohmann::json;
 #endif
 
-struct IOOperations {
+struct io_ops {
 #ifdef DEVELOP
     static std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> read_cycles(const std::string& file_path);
     static void write_cycles(const std::string& file_path, const std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles);
