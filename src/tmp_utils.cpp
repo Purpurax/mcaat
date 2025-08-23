@@ -64,3 +64,205 @@ void print_sdbg_graph_to_dot_file_convert(const string& lib_file_path) {
     std::cout << "}\n";
     std::cout << "--------------DOT-FILE-END--------------" << std::endl;
 }
+
+
+void rotateLeft(std::vector<uint64_t>& arr, int k) {
+    int n = arr.size();
+    if (n == 0) return; // Handle empty array case
+    
+    k = k % n; // In case k is greater than the size of the array
+    if (k == 0) return; // No rotation needed if k is 0 or a multiple of n
+    
+
+    // Step 1: Reverse the first k elements
+    std::reverse(arr.begin(), arr.begin() + k);
+    
+    // Step 2: Reverse the remaining n-k elements
+    std::reverse(arr.begin() + k, arr.end());
+    
+    // Step 3: Reverse the entire array
+    std::reverse(arr.begin(), arr.end());
+}
+
+std::vector<uint64_t> FindRepeatNodePaths(
+    SDBG& sdbg,
+    const vector<uint64_t>& repeat_nodes,
+    const vector<vector<uint64_t>>& ordered_cycles
+) {
+    uint64_t start;
+    uint64_t end;
+    vector<uint64_t> all_the_neighbors;
+    
+    //LIST
+    for(const auto& node : repeat_nodes) {
+        uint64_t outgoings[4]; 
+        int num_outgoings = sdbg.OutgoingEdges(node, outgoings);
+        
+        for(int i = 0; i < num_outgoings; i++) {
+            all_the_neighbors.push_back(outgoings[i]);
+        }
+    }
+
+    for(const auto& node : repeat_nodes) {
+        if(std::find(all_the_neighbors.begin(), all_the_neighbors.end(), node) == all_the_neighbors.end()) {
+            start = node;
+        }
+    }
+        
+    int maxSize = 0;
+    vector<vector<uint64_t>> cycles_per_group = ordered_cycles;
+    std::vector<uint64_t> arr;
+    auto it = std::find(arr.begin(), arr.end(), start);
+    int position_to_rotate = std::distance(arr.begin(), it);
+
+    // Loop through the list of vectors and find the one with the max number of elements
+    for (int i = 0; i < cycles_per_group.size(); i++) {
+        rotateLeft(cycles_per_group[i], position_to_rotate);
+        if (cycles_per_group[i].size() > maxSize) {
+            maxSize = cycles_per_group[i].size();
+            arr = cycles_per_group[i];  // Update the vector with the maximum size
+        }
+    }
+    
+    rotateLeft(arr, position_to_rotate);
+
+    arr.resize(repeat_nodes.size());
+
+    return arr;
+}
+
+pair<vector<uint64_t>, vector<vector<uint64_t>>> FindCRISPRArrayNodes(
+    SDBG& sdbg,
+    const vector<vector<uint64_t>>& ordered_cycles
+) {
+    int threshold = static_cast<int>(ordered_cycles.size());
+    
+    std::unordered_map<uint64_t, int> element_count;
+    for (const auto& cycle : ordered_cycles) {
+        for (const auto& element : cycle) {
+            element_count[element]++;
+        }
+    }
+
+    std::vector<uint64_t> repeat_nodes;
+    for (const auto& [element, count] : element_count) {
+        if (count >= threshold) {
+            repeat_nodes.push_back(element);
+        }
+    }
+
+    if (repeat_nodes.size() >= 27) {
+        return {{}, {}};
+    }
+    
+    std::vector<std::vector<uint64_t>> spacer_nodes;
+    
+    repeat_nodes = FindRepeatNodePaths(sdbg, repeat_nodes, ordered_cycles);
+    
+    for (const auto& cycle : ordered_cycles) {
+        // IMPORTANT: DO NOT ADD UPPER BOUNDARY
+        if (cycle.size() - repeat_nodes.size() >= 23) {
+            std::vector<uint64_t> spacers(cycle.begin() + repeat_nodes.size(), cycle.end());
+            
+            spacer_nodes.push_back(spacers);
+        }
+        // IMPORTANT: DO NOT ADD UPPER BOUNDARY
+    }
+
+    if(repeat_nodes.size() == 0 || spacer_nodes.size() < 3) {
+        return {{}, {}};
+    }
+
+    return {repeat_nodes, spacer_nodes};
+}
+
+string FetchNodeLabel(SDBG& sdbg, const size_t& node) {
+    std::string label;
+    uint8_t seq[sdbg.k()];
+    uint32_t t = sdbg.GetLabel(node, seq);
+    for (int i = sdbg.k() - 1; i >= 0; --i) label.append(1, "ACGT"[seq[i] - 1]);
+    reverse(label.begin(), label.end());
+    return label;
+}
+
+pair<string, vector<string>> get_systems(
+    SDBG& sdbg,
+    const vector<vector<uint64_t>>& ordered_cycles,
+    int& number_of_spacers
+) {
+    auto CRISPRArrayNodes = FindCRISPRArrayNodes(sdbg, ordered_cycles);
+    auto spacers_nodes = CRISPRArrayNodes.second;
+    vector<uint64_t> repeat_nodes = CRISPRArrayNodes.first;
+
+    if (CRISPRArrayNodes.first.empty() || CRISPRArrayNodes.second.empty()) {
+        return std::make_pair(string(), vector<string>());
+    }
+
+    string repeat = FetchNodeLabel(sdbg, repeat_nodes[0]);
+    
+    for (size_t i = 1; i < repeat_nodes.size(); i++) {
+        std::string node_label = FetchNodeLabel(sdbg, repeat_nodes[i]);
+
+        // Method 1: Using back() method
+        char lastChar = node_label.back();  // Get the last character
+        std::string lastCharStr(1, lastChar);  // Convert char to string
+        
+        repeat += lastCharStr;
+    }
+
+    
+    vector<uint64_t> node_order;
+    for (const auto& cycle : ordered_cycles) {
+        node_order.insert(node_order.end(), cycle.begin(), cycle.end());
+    }
+
+    vector<vector<uint64_t>> cycles_nodes = ordered_cycles;
+    
+    vector<string> spacers_temp;
+    vector<string> spacers;
+    string all_cycles_together = FetchNodeLabel(sdbg, node_order[0]);
+    for (int i = 1; i < node_order.size(); ++i) {
+        uint64_t node = node_order[i];
+        std::string node_label = FetchNodeLabel(sdbg, node);
+
+        // Method 1: Using back() method
+        char lastChar = node_label.back();  // Get the last character
+        std::string lastCharStr(1, lastChar);  // Convert char to string
+
+        all_cycles_together += lastCharStr;
+    }
+    
+    size_t start = 0;
+    size_t end;
+
+    // Iterate through the string and find substrings
+    while ((end = all_cycles_together.find(repeat, start)) != std::string::npos) {
+        std::string part = all_cycles_together.substr(start, end - start);
+        if (!part.empty()) {
+            spacers_temp.push_back(part);
+        }
+        start = end + repeat.size();
+    }
+
+    // Add the remaining part after the last delimiter
+    if (start < all_cycles_together.size()) {
+        spacers_temp.push_back(all_cycles_together.substr(start));
+    }
+
+    for(const auto& spacer : spacers_temp) {
+        // if(spacer.size() < 23 || spacer.size() > 50) {
+        //     std::cout << "HEREB " << spacer.size() << std::endl;
+        //     return std::make_pair(string(), vector<string>());
+        // }
+        
+        spacers.push_back(spacer.substr(0, spacer.size()));
+        number_of_spacers++;
+    }
+    
+    if(spacers.size() < 3){
+        number_of_spacers -= spacers.size();
+        return std::make_pair(string(), vector<string>());
+    }
+
+    return std::make_pair(repeat, spacers);
+}
