@@ -646,7 +646,7 @@ void apply_topological_sort(
     }
     confidence *= confidence_for_best;
 
-    
+
     uint32_t start_node = new_possible_start_nodes[best_start_node];
     total_order.push_back(start_node);
 
@@ -664,11 +664,6 @@ void apply_topological_sort(
     for (auto it = new_edges.begin(); it != new_edges.end(); ) {
         if (it->first == start_node) {
             it = new_edges.erase(it);
-        } else {
-            // Remove any occurrence of start_node in the value vector
-            auto& vec = it->second;
-            vec.erase(std::remove(vec.begin(), vec.end(), start_node), vec.end());
-            ++it;
         }
     }
 
