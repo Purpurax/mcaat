@@ -60,6 +60,8 @@ struct Graph {
     }
 };
 
+const uint32_t NOT_IN_ANY_CYCLE_INDEX = std::numeric_limits<uint32_t>::max();
+
 /**
  * @internal
  * @brief Used to get a hash from a tuple
@@ -206,10 +208,39 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints_from_jump(
 
 /**
  * @internal
+ * @brief Uses a single jump to derive constraints involving nodes outside the cycles
+ * 
+ * This function creates constraints using node ids that cannot be mapped to any cycle index,
+ * treating these nodes as representing the "outside" of the CRISPR array.
+ * 
+ * Assumes that the CRISPR array must have at least one jump entering from outside and one jump leading outside.
+ * Constraints are constructed to reflect transitions between the outside and the cycles.
+ * 
+ * **Constraint**: is composed of 2 indices, standing for cycle indices or a special value representing "outside".
+ * 
+ * Internally, the function reconstructs the path from the start and end node using the jump.
+ * Nodes that cannot be mapped to any cycle index are considered outside.
+ * Constraints are generated for transitions from outside to inside and from inside to outside.
+ * 
+ * @param graph The graph used to find the jump's path
+ * @param jump The jump for which constraints have to be found
+ * @param node_to_cycle_map The map used to turn node_ids into usable cycle indices
+ * 
+ * @return All valid constraints involving outside nodes (vector<tuple<uint32_t, uint32_t>>)
+ */
+vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
+    const Graph& graph,
+    const Jump& jump,
+    const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
+);
+
+/**
+ * @internal
  * @brief Uses the jumps to derive constraints
  * 
  * A Constraint is composed of 2 indices, standing for cycle indices.
  * Uses the information provided by the jumps to derive as many constraints as possible.
+ * Also extra constraints that use the uint32_t max as an index to indicate outside of cycles
  * 
  * For more technical information look into:
  * @see generate_constraints_from_jump
@@ -239,38 +270,37 @@ bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges);
 
 /**
  * @internal
- * @brief Returns the edge according to some evaluation
+ * @brief Returns the edge with the minimum weight and its confidence that it will resolve the cycles
  * 
- * Each edge is evaluated to {edges_occurence_count_in_cycles} * {edge_weight}.
- * The edge with the smallest value will be returned.
+ * The edge with the smallest weight will be returned.
+ * The confidence is just the relative weight amount compared to the total weight
  * 
- * @pre cycles.size() >= 2
- * @pre edges_with_weights has every edge constructable from cycles
+ * @post 0.0 <= confidence <= 1.0
  * 
  * @param edges_with_weights Used for the edge_weight
- * @param cycles Used for edge_occurence_count_in_cycles
  * 
- * @return Best edge (tuple<uint32_t, uint32_t>)
+ * @return Best edge (tuple<uint32_t, uint32_t>) and confidence (float)
  */
-tuple<uint32_t, uint32_t> resolve_cycles_greedy_best_edge(
-    const unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights,
-    const vector<vector<uint64_t>>& cycles
+pair<tuple<uint32_t, uint32_t>, float> resolve_cycles_greedy_best_edge(
+    const unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
 );
 
 /**
  * @internal
  * @brief Resolves any cycles caused when viewing constraints as edges
  * 
- * @post Removes constraints that lead to cycles
+ * @pre 0.0 < confidence <= 1.0
  * 
- * @todo Improve the greedy constraint choice to only consider edges that are part of the cycle
+ * @post Removes constraints that lead to cycles
+ * @post confidence will be reduced according to the resolving confidence
+ * @post 0.0 < confidence <= 1.0
  * 
  * @param constraints Viewed as edges of a graph
- * @param cycles Used for evaluating which edge to remove
+ * @param confidence The overall confidence of the spacer ordering
  */
 void resolve_cycles_greedy(
     vector<tuple<uint32_t, uint32_t>>& constraints,
-    const vector<vector<uint64_t>>& cycles
+    float& confidence
 );
 
 /**
@@ -304,7 +334,7 @@ void apply_topological_sort(
  * 
  * Constructs edges from the constraints and uses topological sort to get an answer
  * 
- * @pre The constraints cannot have any cycles
+ * @pre The constraints cannot have any cycles (ignoring constraints that contain uint32_t max)
  * 
  * @post confidence is in [0.0, 1.0]
  * @post The result is a permutation of nodes
@@ -346,16 +376,16 @@ vector<uint32_t> order_cycles(
 );
 
 /**
- * @brief Combines the Cycles using cycle_order
+ * @brief Uses the permutation of cycle_order to order the cycles
  * 
  * @note Any invalid cycle index in the cycle_order will be ignored
  * 
- * @param cycle_order Represents the order of the combined cycles
- * @param cycles The cycles used to get the result
+ * @param cycle_order Represents the order of the cycles
+ * @param cycles The cycles that need to be ordered
  * 
- * @return The combined cycles as one vector (vector<uint64_t>)
+ * @return The ordered cycles (vector<uint64_t>)
  */
-vector<uint64_t> turn_cycle_order_into_node_order(
+vector<vector<uint64_t>> get_ordered_cycles(
     const vector<uint32_t>& cycle_order,
     const vector<vector<uint64_t>>& cycles
 );

@@ -330,8 +330,8 @@ int main(int argc, char** argv) {
         remaining_jumps.push_back(relevant_jumps);
         remaining_cycles.push_back(relevant_cycles);
     }
-    cout << "  ✅ " << remaining_subgraphs.size() << "/";
-    cout << subgraphs.size() << " subproblems remaining" << endl;
+    cout << "  ✅ Filtered out " << subgraphs.size()-remaining_subgraphs.size();
+    cout << "/" << subgraphs.size() << " subproblems" << endl;
 
     
     cout << "  🔄 Solving " << remaining_subgraphs.size();
@@ -354,7 +354,7 @@ int main(int argc, char** argv) {
         cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
         cout << get_cycle_count(cycles_map) << " used" << endl;
 
-        float confidence;
+        float confidence = 1.0;
         auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles, confidence);
 
         cout << "      ▸ With a confidence of " << std::fixed << std::setprecision(2);
@@ -365,21 +365,18 @@ int main(int argc, char** argv) {
         cout << endl;
 
         cout << "      ▸ Turning the cycle order into a node order" << endl;
-        auto node_order = turn_cycle_order_into_node_order(cycle_order, relevant_cycles);
+        auto ordered_cycles = get_ordered_cycles(cycle_order, relevant_cycles);
         
-        if (node_order.size() < 2) {
+        if (ordered_cycles.size() < 2) {
             cout << "      ▸ Node order is to short and is not processed further" << endl;
             continue;
         }
 
         int number_of_spacers = 0;
         cout << "      ▸ Staring the filter process:" << endl;
-        // todo modify filters to take in cycle orders to return sequences
-        Filters filters(sdbg, cycles_map);
-        auto systems = filters.ListArrays(node_order, number_of_spacers);
-        for (const auto& pair: systems) {
-            ALL_SYSTEMS.insert(pair);
-        }
+        // todo check if using the subgraph is sufficient instead of the full sdbg
+        auto system = get_systems(sdbg, ordered_cycles, number_of_spacers);
+        ALL_SYSTEMS[system.first] = system.second;
         cout << "        ▸ Number of spacers: " << number_of_spacers;
         cout << " before cleaning" << endl;
     }

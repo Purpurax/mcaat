@@ -185,8 +185,8 @@ vector<Jump> get_relevant_jumps(const Graph& graph, const vector<Jump>& all_jump
     vector<Jump> relevant_jumps;
 
     for (const auto& jump : all_jumps) {
-        if (graph.nodes.find(jump.start_k_mer_id) != graph.nodes.end() &&
-            graph.nodes.find(jump.end_k_mer_id) != graph.nodes.end()) {
+        if (graph.nodes.find(jump.start_k_mer_id) != graph.nodes.end()
+        || graph.nodes.find(jump.end_k_mer_id) != graph.nodes.end()) {
             relevant_jumps.push_back(jump);
         }
     }
@@ -367,6 +367,102 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints_from_jump(
     return every_possible_combination(cycle_indices_in_order);
 }
 
+vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
+    const Graph& graph,
+    const Jump& jump,
+    const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
+) {
+    vector<tuple<uint32_t, uint32_t>> constraints;
+
+    const vector<vector<uint64_t>> all_paths = find_all_possible_paths(
+        graph,
+        jump.start_k_mer_id,
+        jump.end_k_mer_id,
+        jump.nodes_in_between + 1 // + 1, to count the end node as well
+    );
+
+    if (all_paths.empty()) {
+        return constraints;
+    }
+
+    vector<uint32_t> cycle_indices_in_order;
+    // + 2 as start and end nodes are included in the path
+    for (size_t i = 0; i < static_cast<size_t>(jump.nodes_in_between) + 2; ++i) {
+        bool cycle_index_differs = false;
+        optional<uint32_t> common_cycle_index = std::nullopt;
+        for (const auto& path : all_paths) {
+            const uint64_t node = path[i];
+
+            uint32_t cycle_index;
+            auto it = node_to_cycle_map.find(node);
+            if (it != node_to_cycle_map.end()) {
+                cycle_index = it->second;
+            } else {
+                cycle_index = NOT_IN_ANY_CYCLE_INDEX;
+            }
+
+            if (common_cycle_index.has_value() && common_cycle_index.value() != cycle_index) {
+                cycle_index_differs = true;
+                break;
+            } else if (!common_cycle_index.has_value()) {
+                common_cycle_index = std::make_optional(cycle_index);
+            }
+        }
+
+        if (cycle_index_differs || !common_cycle_index.has_value()) {
+            continue;
+        }
+
+        cycle_indices_in_order.push_back(common_cycle_index.value());
+    }
+
+    if (cycle_indices_in_order.size() < 2) {
+        return {};
+    }
+
+    // Be z the index for the "not being in any cycle" and X a sequence of cycle indices
+    // The following cases are possible for cycle_indices_in_order:
+    //  - z X => Indicates the indices X are close to the start, i.e. are the start
+    //  - X z => Indicates the indices X are close to the end, i.e. are the end
+    //  - z X z => Doesn't provide any value
+    //  - X z X => Doesn't provide any value
+    if (cycle_indices_in_order[0] == NOT_IN_ANY_CYCLE_INDEX
+    && cycle_indices_in_order[cycle_indices_in_order.size() - 1] != NOT_IN_ANY_CYCLE_INDEX) {
+        bool is_valid_start = true;
+        bool expecting_z = true;
+        for (const auto& cycle_index : cycle_indices_in_order) {
+            if (expecting_z && cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
+                expecting_z = false;
+            } else if (!expecting_z && cycle_index == NOT_IN_ANY_CYCLE_INDEX) {
+                is_valid_start = false;
+                break;
+            }
+        }
+
+        if (is_valid_start) {
+            return every_possible_combination(cycle_indices_in_order);
+        }
+    } else if (cycle_indices_in_order[0] != NOT_IN_ANY_CYCLE_INDEX
+    && cycle_indices_in_order[cycle_indices_in_order.size() - 1] == NOT_IN_ANY_CYCLE_INDEX) {
+        bool is_valid_end = true;
+        bool expecting_z = false;
+        for (const auto& cycle_index : cycle_indices_in_order) {
+            if (expecting_z && cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
+                is_valid_end = false;
+                break;
+            } else if (!expecting_z && cycle_index == NOT_IN_ANY_CYCLE_INDEX) {
+                expecting_z = true;
+            }
+        }
+
+        if (is_valid_end) {
+            return every_possible_combination(cycle_indices_in_order);
+        }
+    }
+    
+    return {};
+}
+
 vector<tuple<uint32_t, uint32_t>> generate_constraints(
     const Graph& graph,
     const vector<Jump>& jumps,
@@ -380,8 +476,16 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints(
             jump,
             node_to_cycle_map
         );
+        const auto extra_constraints = generate_out_of_cycles_constraints_from_jump(
+            graph,
+            jump,
+            node_to_cycle_map
+        );
 
         for (const auto& constraint : jump_constraints) {
+            constraints.push_back(constraint);
+        }
+        for (const auto& constraint : extra_constraints) {
             constraints.push_back(constraint);
         }
     }
@@ -414,61 +518,53 @@ bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges) {
     return false;
 }
 
-tuple<uint32_t, uint32_t> resolve_cycles_greedy_best_edge(
-    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights,
-    const vector<vector<uint64_t>>& cycles
+pair<tuple<uint32_t, uint32_t>, float> resolve_cycles_greedy_best_edge(
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
 ) {
-    // Count edge occurrences in cycles
-    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edge_occurence_count_in_cycles;
-    for (const auto& cycle : cycles) {
-        for (size_t i = 0; i + 1 < cycle.size(); ++i) {
-            uint32_t from = static_cast<uint32_t>(cycle[i]);
-            uint32_t to = static_cast<uint32_t>(cycle[i + 1]);
-            tuple<uint32_t, uint32_t> edge(from, to);
-            edge_occurence_count_in_cycles[edge]++;
-        }
-        // If cycle is closed, add edge from last to first
-        if (!cycle.empty()) {
-            uint32_t from = static_cast<uint32_t>(cycle.back());
-            uint32_t to = static_cast<uint32_t>(cycle.front());
-            tuple<uint32_t, uint32_t> edge(from, to);
-            edge_occurence_count_in_cycles[edge]++;
-        }
-    }
-
-    // Find edge with minimal value = edge_weight * edge_occurence_count_in_cycles
     tuple<uint32_t, uint32_t> best_edge;
-    int min_value = std::numeric_limits<int>::max();
+    int total_weight = 0;
+    int min_weight = std::numeric_limits<int>::max();
     for (const auto& [edge, weight] : edges_with_weights) {
-        int occur = edge_occurence_count_in_cycles[edge];
-        int value = weight * occur;
-        if (value < min_value) {
-            min_value = value;
+        total_weight += weight;
+        if (weight < min_weight) {
+            min_weight = weight;
             best_edge = edge;
         }
     }
 
-    return best_edge;
+    float confidence = static_cast<float>(total_weight - min_weight);
+    confidence /= static_cast<float>(total_weight);
+
+    return std::make_pair(best_edge, confidence);
 }
 
 void resolve_cycles_greedy(
     vector<tuple<uint32_t, uint32_t>>& constraints,
-    const vector<vector<uint64_t>>& cycles
+    float& confidence
 ) {
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
     unordered_map<uint32_t, vector<uint32_t>> edges;
     for (const auto& constraint : constraints) {
-        edges_with_weights[constraint]++;
-
         uint32_t from = std::get<0>(constraint);
         uint32_t to = std::get<1>(constraint);
+        
+        if (from == NOT_IN_ANY_CYCLE_INDEX || to == NOT_IN_ANY_CYCLE_INDEX) {
+            continue;
+        }
+
+        edges_with_weights[constraint]++;
         edges[from].push_back(to);
     }
 
     vector<tuple<uint32_t, uint32_t>> removed_edges;
 
     while (has_cycle(edges)) {
-        auto edge_to_remove = resolve_cycles_greedy_best_edge(edges_with_weights, cycles);
+        auto result = resolve_cycles_greedy_best_edge(edges_with_weights);
+        auto edge_to_remove = std::get<0>(result);
+        auto edge_remove_confidence = std::get<1>(result);
+
+        confidence *= edge_remove_confidence;
+
         removed_edges.push_back(edge_to_remove);
         edges_with_weights.erase(edge_to_remove);
         
@@ -501,8 +597,9 @@ void resolve_cycles_greedy(
 
 void apply_topological_sort(
     const vector<uint32_t>& possible_start_nodes,
+    const unordered_map<uint32_t, int>& node_affection_to_start,
     const unordered_map<uint32_t, vector<uint32_t>>& edges,
-    uint32_t& possible_choices,
+    float& confidence,
     vector<uint32_t>& total_order
 ) {
     if (possible_start_nodes.empty()) {
@@ -512,21 +609,49 @@ void apply_topological_sort(
     vector<uint32_t> new_possible_start_nodes = possible_start_nodes;
     unordered_map<uint32_t, vector<uint32_t>> new_edges = edges;
     
-    // Choose some start_node
-    uint32_t start_node = new_possible_start_nodes[0];
-    if (new_possible_start_nodes.size() > 0
-    && possible_choices > std::numeric_limits<uint32_t>::max() - new_possible_start_nodes.size() + 1) {
-        possible_choices = std::numeric_limits<uint32_t>::max();
-    } else {
-        possible_choices += static_cast<uint32_t>(new_possible_start_nodes.size()) - 1;
+    // Choose start_node by the affection to the start
+    int best_start_node = 0;
+    int best_affection = node_affection_to_start.at(new_possible_start_nodes[best_start_node]);
+    
+    for (int i = 0; i < new_possible_start_nodes.size(); ++i) {
+        int current_affection = node_affection_to_start.at(new_possible_start_nodes[i]);
+        if (current_affection >= best_affection) {
+            best_affection = current_affection;
+            best_start_node = i;
+        }
     }
+
+    int second_best_affection = node_affection_to_start.at(new_possible_start_nodes[
+        (best_start_node + 1) % new_possible_start_nodes.size()
+    ]);
+    for (int i = 0; i < new_possible_start_nodes.size(); ++i) {
+        int current_affection = node_affection_to_start.at(new_possible_start_nodes[i]);
+        if (i != best_start_node && current_affection >= second_best_affection) {
+            second_best_affection = current_affection;
+        }
+    }
+
+    // Using some function f: [1.0;inf] -> [0.5; 1.0]
+    // with f(1.0) = 0.5 and for greater x it gets closer to 1.0
+    // e.g. f(x) = -1 / (x**6 + 1) + 1
+    int shift = 0; // affection can be negative
+    if (second_best_affection <= 0) {
+        shift = -second_best_affection + 1;
+    }
+
+    float ratio = static_cast<float>(best_affection + shift) / static_cast<float>(second_best_affection + shift);
+    float confidence_for_best = (-1.0 / (pow(ratio, 6) + 1)) + 1;
+    if (new_possible_start_nodes.size() == 1) {
+        confidence_for_best = 1.0;
+    }
+    confidence *= confidence_for_best;
+
+    
+    uint32_t start_node = new_possible_start_nodes[best_start_node];
     total_order.push_back(start_node);
 
-    // Remove the start_node as choosable
-    new_possible_start_nodes.erase(
-        std::remove(new_possible_start_nodes.begin(), new_possible_start_nodes.end(), start_node),
-        new_possible_start_nodes.end()
-    );
+    // Remove the start_node as choosable (by index, not value)
+    new_possible_start_nodes.erase(new_possible_start_nodes.begin() + best_start_node);
 
     // Removes every edge containing the start_node
     vector<uint32_t> start_node_candidates;
@@ -562,7 +687,13 @@ void apply_topological_sort(
         }
     }
 
-    apply_topological_sort(new_possible_start_nodes, new_edges, possible_choices, total_order);
+    apply_topological_sort(
+        new_possible_start_nodes,
+        node_affection_to_start,
+        new_edges,
+        confidence,
+        total_order
+    );
 }
 
 vector<uint32_t> solve_constraints_with_topological_sort(
@@ -572,12 +703,18 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 ) {
     unordered_map<uint32_t, vector<uint32_t>> edges;
     for (const auto& constraint : constraints) {
-        uint32_t source = std::get<0>(constraint);
-        uint32_t dest = std::get<1>(constraint);
-        auto it = edges.find(source);
-        if (it != edges.end()) {
-            if (std::find(it->second.begin(), it->second.end(), dest) == it->second.end()) {
-                it->second.push_back(dest);
+        const uint32_t source = std::get<0>(constraint);
+        const uint32_t dest = std::get<1>(constraint);
+
+        if (source == NOT_IN_ANY_CYCLE_INDEX || dest == NOT_IN_ANY_CYCLE_INDEX) {
+            continue;
+        }
+
+        auto edge_search = edges.find(source);
+        if (edge_search != edges.end()) {
+            if (std::find(edge_search->second.begin(), edge_search->second.end(), dest)
+            == edge_search->second.end()) {
+                edge_search->second.push_back(dest);
             }
         } else {
             edges[source] = {dest};
@@ -589,7 +726,10 @@ vector<uint32_t> solve_constraints_with_topological_sort(
     for (uint32_t node : nodes) {
         bool has_incoming = false;
         for (const auto& constraint : constraints) {
-            if (std::get<1>(constraint) == node) {
+            const uint32_t source = std::get<0>(constraint);
+            const uint32_t dest = std::get<1>(constraint);
+
+            if (source != NOT_IN_ANY_CYCLE_INDEX && dest == node) {
                 has_incoming = true;
                 break;
             }
@@ -599,22 +739,45 @@ vector<uint32_t> solve_constraints_with_topological_sort(
         }
     }
 
-    // std::cout << "Node set: ";
-    // for (const auto& node : nodes) {
-    //     std::cout << node << " ";
-    // }
-    // std::cout << endl;
+    // Used for the heuristic, which start node to choose from
+    // Big positive number indicates a strong affection towards being the first choosen start node
+    // Big negative, affection towards the end
+    unordered_map<uint32_t, int> node_affection_to_start;
+    for (uint32_t node : nodes) {
+        node_affection_to_start[node] = 0;
+    }
+
+    for (const auto& constraint : constraints) {
+        const uint32_t source = std::get<0>(constraint);
+        const uint32_t dest = std::get<1>(constraint);
+
+        if (source != NOT_IN_ANY_CYCLE_INDEX && dest != NOT_IN_ANY_CYCLE_INDEX) {
+            continue;
+        }
+
+        if (source == NOT_IN_ANY_CYCLE_INDEX) {
+            node_affection_to_start[dest]++;
+        } else {
+            node_affection_to_start[source]--;
+        }
+    }
+
+    // Sort possible_start_nodes by affection descending before printing
+    std::vector<std::pair<uint32_t, int>> sorted_affection;
+    for (const auto& [node, affection] : node_affection_to_start) {
+        sorted_affection.emplace_back(node, affection);
+    }
+    std::sort(sorted_affection.begin(), sorted_affection.end(),
+        [](const auto& a, const auto& b) { return a.second > b.second; });
 
     vector<uint32_t> total_order;
-    uint32_t possible_choices = 1;
-    apply_topological_sort(possible_start_nodes, edges, possible_choices, total_order);
-    std::cout << "      ▸ The amount of possible choices for the order is ";
-    std::cout << possible_choices << std::endl;
-    if (possible_choices == 0) {
-        confidence = 1.0f;
-    } else {
-        confidence = 1.0f / possible_choices;
-    }
+    apply_topological_sort(
+        possible_start_nodes,
+        node_affection_to_start,
+        edges,
+        confidence,
+        total_order
+    );
 
     // std::cout << "All possible topological orders:" << endl;
     // for (const auto& order : all_orders) {
@@ -641,27 +804,29 @@ vector<uint32_t> order_cycles(
 
     std::cout << "      ▸ " << constraints.size() << " constraints derived" << std::endl;
 
-    resolve_cycles_greedy(constraints, cycles);
+    float resolve_cycles_confidence = 1.0;
+    resolve_cycles_greedy(constraints, resolve_cycles_confidence);
+    confidence *= resolve_cycles_confidence;
 
     std::cout << "      ▸ " << constraints.size();
-    std::cout << " constraints remain after resolving cycles" << endl;
+    std::cout << " constraints remain after resolving cycles.";
+    std::cout << "The confidence of the resolution is " << std::fixed << std::setprecision(2);
+    std::cout << (resolve_cycles_confidence * 100) << "%" << endl;
 
     return solve_constraints_with_topological_sort(constraints, all_cycle_indices, confidence);
 }
 
-vector<uint64_t> turn_cycle_order_into_node_order(
+vector<vector<uint64_t>> get_ordered_cycles(
     const vector<uint32_t>& cycle_order,
     const vector<vector<uint64_t>>& cycles
 ) {
-    vector<uint64_t> node_order;
+    vector<vector<uint64_t>> ordered_cycles;
 
     for (const auto& cycle_index : cycle_order) {
         if (cycle_index < cycles.size()) {
-            for (const auto& node_id : cycles[cycle_index]) {
-                node_order.push_back(node_id);
-            }
+            ordered_cycles.push_back(cycles[cycle_index]);
         }
     }
 
-    return node_order;
+    return ordered_cycles;
 }
