@@ -12,3 +12,5 @@ CMakeCache.txt
 Makefile
 test
 test_ids
+
+**/tiny_graph
