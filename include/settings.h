@@ -21,6 +21,7 @@ struct Settings {
     std::string graph_folder;
     std::string cycles_folder;
     std::string output_file;
+    std::string benchmark_file;
 
     Settings() {
         // Generate timestamp for folder structure

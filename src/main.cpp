@@ -31,6 +31,7 @@
 #include "settings.h"
 #include "spacer_ordering.h"
 #include "tmp_utils.h"
+#include "evaluation.h"
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -102,6 +103,7 @@ Settings parse_arguments(int argc, char* argv[]) {
                  << "  --ram <amount>                  RAM to use (e.g., 4G, 500M). Default: 95% of system RAM\n"
                  << "  --threads <num>                 Number of threads. Default: CPU cores - 2\n"
                  << "  --output-folder <path>          Output directory. If not provided, a timestamped folder is created\n"
+                 << "  --benchmark <file>              File containing expected crispr sequences line separated\n"
                  << "  --help, -h                      Show this help message\n";
             exit(0);
         }
@@ -113,6 +115,13 @@ Settings parse_arguments(int argc, char* argv[]) {
             }
             --i;
             required_files_provided = true;
+        } else if (arg == "--benchmark") {
+            if (++i < argc) {
+                settings.benchmark_file = argv[i];
+            } else {
+                throw runtime_error("Error: Missing value for --benchmark");
+            }
+            --i;
         } else if (arg == "--ram") {
             if (++i < argc) {
                 string ram_input = argv[i];
@@ -526,6 +535,7 @@ int main(int argc, char** argv) {
     
     cout << "  🔄 Solving " << remaining_subgraphs.size();
     cout << " subproblems..." << endl;
+    vector<string> found_crispr_sequences;
     unordered_map<string, vector<string>> ALL_SYSTEMS;
     for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
         const auto& subgraph = remaining_subgraphs[idx];
@@ -567,6 +577,15 @@ int main(int argc, char** argv) {
         // todo check if using the subgraph is sufficient instead of the full sdbg
         auto system = get_systems(sdbg, ordered_cycles, number_of_spacers);
         ALL_SYSTEMS[system.first] = system.second;
+        {
+            std::ostringstream oss;
+            for (const auto& s : system.second) {
+                oss << system.first;
+                oss << s;
+            }
+            oss << system.first;
+            found_crispr_sequences.push_back(oss.str());
+        }
         cout << "        ▸ Number of spacers: " << number_of_spacers;
         cout << " before cleaning" << endl;
     }
@@ -577,6 +596,64 @@ int main(int argc, char** argv) {
     cout << std::fixed << std::setprecision(2);
     cout << std::chrono::duration<double>(end_time - start_time).count();
     cout << " seconds" << endl;
+
+
+    if (settings.benchmark_file != "") {
+        cout << "\n══════════════════════════════════════════════" << endl;
+        cout << "🔸STEP 8: Compare to ground of truth using benchmark file" << endl;
+        cout << "══════════════════════════════════════════════" << endl;
+        start_time = std::chrono::high_resolution_clock::now();
+    
+        vector<string> benchmark_sequences;
+        ifstream benchmark_in(settings.benchmark_file);
+        if (!benchmark_in) {
+            cerr << "Error: Could not open benchmark file: " << settings.benchmark_file << endl;
+        } else {
+            string line;
+            while (getline(benchmark_in, line)) {
+                if (!line.empty()) {
+                    benchmark_sequences.push_back(line);
+                }
+            }
+            benchmark_in.close();
+            cout << "Loaded " << benchmark_sequences.size() << " benchmark sequences." << endl;
+        }
+
+        cout << "  ▸ " << found_crispr_sequences.size();
+        cout << " crispr sequences are found and benchmarked using ";
+        cout << benchmark_sequences.size() << " sequences" << endl;
+
+        const auto benchmark_results = compare_to_ground_of_truth(
+            found_crispr_sequences,
+            benchmark_sequences
+        );
+
+        size_t no_match_count = 0;
+        float overall_similarity = 1.0;
+        for (const auto& [sequence, similarity] : benchmark_results) {
+            if (similarity == -1.0) {
+                cout << "    ▸ No expected match for sequence: ";
+                cout << sequence << endl;
+                no_match_count++;
+            } else {
+                cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
+                cout << (similarity * 100) << "% similarity for sequence: ";
+                cout << sequence << endl;
+                overall_similarity *= similarity;
+            }
+        }
+
+        cout << "  ▸ The overall similarity is ≥";
+        cout << std::fixed << std::setprecision(2) << (overall_similarity * 100);
+        cout << "% with " << no_match_count << "/" << benchmark_results.size();
+        cout << " ignored" << endl;
+
+        end_time = std::chrono::high_resolution_clock::now();
+        cout << "\n⏳ Time elapsed: ";
+        cout << std::fixed << std::setprecision(2);
+        cout << std::chrono::duration<double>(end_time - start_time).count();
+        cout << " seconds" << endl;
+    }
     
     cout << "══════════════════════════════════════════════" << endl;
 
