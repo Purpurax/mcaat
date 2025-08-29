@@ -118,6 +118,23 @@ vector<Jump> get_jumps_from_reads(
                 #pragma omp critical
                 jumps.push_back(jump_opt.value());
             }
+
+            // Experimentally trying to reduce the jump size by splitting sequence
+            size_t half = sequence.length() / 2;
+            string seq1 = sequence.substr(0, half);
+            string seq2 = sequence.substr(half);
+
+            const std::optional<Jump> jump_opt1 = create_jump_from_sequence(seq1, kmer_to_node_id, K);
+            if (jump_opt1.has_value()) {
+                #pragma omp critical
+                jumps.push_back(jump_opt1.value());
+            }
+
+            const std::optional<Jump> jump_opt2 = create_jump_from_sequence(seq2, kmer_to_node_id, K);
+            if (jump_opt2.has_value()) {
+                #pragma omp critical
+                jumps.push_back(jump_opt2.value());
+            }
         }
     }
 

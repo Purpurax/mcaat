@@ -573,18 +573,20 @@ int main(int argc, char** argv) {
         }
 
         int number_of_spacers = 0;
-        cout << "      ▸ Staring the filter process:" << endl;
+        cout << "      ▸ Starting the filter process:" << endl;
         // todo check if using the subgraph is sufficient instead of the full sdbg
         auto system = get_systems(sdbg, ordered_cycles, number_of_spacers);
         ALL_SYSTEMS[system.first] = system.second;
         {
             std::ostringstream oss;
-            for (const auto& s : system.second) {
+            for (auto it = system.second.rbegin(); it != system.second.rend(); ++it) {
                 oss << system.first;
-                oss << s;
+                oss << *it;
             }
             oss << system.first;
-            found_crispr_sequences.push_back(oss.str());
+            if (oss.str().size() > 23) {
+                found_crispr_sequences.push_back(oss.str());
+            }
         }
         cout << "        ▸ Number of spacers: " << number_of_spacers;
         cout << " before cleaning" << endl;
