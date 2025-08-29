@@ -211,58 +211,52 @@ pair<string, vector<string>> get_systems(
     }
 
     
-    vector<uint64_t> node_order;
-    for (const auto& cycle : ordered_cycles) {
-        node_order.insert(node_order.end(), cycle.begin(), cycle.end());
-    }
-
-    vector<vector<uint64_t>> cycles_nodes = ordered_cycles;
-    
-    vector<string> spacers_temp;
     vector<string> spacers;
-    string all_cycles_together = FetchNodeLabel(sdbg, node_order[0]);
-    for (int i = 1; i < node_order.size(); ++i) {
-        uint64_t node = node_order[i];
-        std::string node_label = FetchNodeLabel(sdbg, node);
+    for (const auto& cycle : ordered_cycles) {
+        string spacer = "";
 
-        // Method 1: Using back() method
-        char lastChar = node_label.back();  // Get the last character
-        std::string lastCharStr(1, lastChar);  // Convert char to string
+        bool passed_repeat = false;
+        bool passed_spacers = false;
+        int loop_counter = 0;
 
-        all_cycles_together += lastCharStr;
+        // The spacers might wrap around, therefore go through cycle twice
+        while (loop_counter < 2) {
+            for (const auto& node : cycle) {
+                bool is_repeat_node = std::find(repeat_nodes.begin(), repeat_nodes.end(), node) != repeat_nodes.end();
+                if (is_repeat_node) {
+                    passed_repeat = true;
+                    if (passed_spacers) {
+                        break;
+                    }
+                } else {
+                    passed_spacers = true;
+                }
+
+                if (!is_repeat_node && passed_repeat) {
+                    if (spacer == "") {
+                        spacer = FetchNodeLabel(sdbg, node);
+                    } else {
+                        char new_char = FetchNodeLabel(sdbg, node).back();
+                        string new_char_str(1, new_char);
+                        spacer += new_char_str;
+                    }
+                }
+            }
+            loop_counter++;
+        }
+
+        if (spacer.size() > 45) {
+            spacer = spacer.substr(23, spacer.size() - 45);
+        } else {
+            spacer.clear();
+        }
+        spacers.push_back(spacer);
     }
     
-    size_t start = 0;
-    size_t end;
-
-    // Iterate through the string and find substrings
-    while ((end = all_cycles_together.find(repeat, start)) != std::string::npos) {
-        std::string part = all_cycles_together.substr(start, end - start);
-        if (!part.empty()) {
-            spacers_temp.push_back(part);
-        }
-        start = end + repeat.size();
-    }
-
-    // Add the remaining part after the last delimiter
-    if (start < all_cycles_together.size()) {
-        spacers_temp.push_back(all_cycles_together.substr(start));
-    }
-
-    for(const auto& spacer : spacers_temp) {
-        // if(spacer.size() < 23 || spacer.size() > 50) {
-        //     std::cout << "HEREB " << spacer.size() << std::endl;
+    // if(spacers.size() < 3){
         //     return std::make_pair(string(), vector<string>());
         // }
         
-        spacers.push_back(spacer.substr(0, spacer.size()));
-        number_of_spacers++;
-    }
-    
-    if(spacers.size() < 3){
-        number_of_spacers -= spacers.size();
-        return std::make_pair(string(), vector<string>());
-    }
-
+    number_of_spacers = spacers.size();
     return std::make_pair(repeat, spacers);
 }

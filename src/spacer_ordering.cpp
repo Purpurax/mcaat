@@ -545,8 +545,8 @@ void resolve_cycles_greedy(
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
     unordered_map<uint32_t, vector<uint32_t>> edges;
     for (const auto& constraint : constraints) {
-        uint32_t from = std::get<0>(constraint);
-        uint32_t to = std::get<1>(constraint);
+        const uint32_t from = std::get<0>(constraint);
+        const uint32_t to = std::get<1>(constraint);
         
         if (from == NOT_IN_ANY_CYCLE_INDEX || to == NOT_IN_ANY_CYCLE_INDEX) {
             continue;
@@ -568,8 +568,8 @@ void resolve_cycles_greedy(
         removed_edges.push_back(edge_to_remove);
         edges_with_weights.erase(edge_to_remove);
         
-        uint32_t from = std::get<0>(edge_to_remove);
-        uint32_t to = std::get<1>(edge_to_remove);
+        const uint32_t from = std::get<0>(edge_to_remove);
+        const uint32_t to = std::get<1>(edge_to_remove);
         auto it = edges.find(from);
         if (it != edges.end()) {
             auto& vec = it->second;
@@ -596,112 +596,97 @@ void resolve_cycles_greedy(
 }
 
 void apply_topological_sort(
-    const vector<uint32_t>& possible_start_nodes,
+    vector<uint32_t>& possible_start_nodes,
     const unordered_map<uint32_t, int>& node_affection_to_start,
-    const unordered_map<uint32_t, vector<uint32_t>>& edges,
-    float& confidence,
+    unordered_map<uint32_t, int>& heuristic_node_values,
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges,
     vector<uint32_t>& total_order
 ) {
     if (possible_start_nodes.empty()) {
         return;
     }
 
-    vector<uint32_t> new_possible_start_nodes = possible_start_nodes;
-    unordered_map<uint32_t, vector<uint32_t>> new_edges = edges;
-    
-    // Choose start_node by the affection to the start
+    // Choose start_node by the heuristic
     int best_start_node = 0;
-    int best_affection = node_affection_to_start.at(new_possible_start_nodes[best_start_node]);
+    float best_heuristic_value = static_cast<float>(node_affection_to_start.at(possible_start_nodes[best_start_node]));
     
-    for (int i = 0; i < new_possible_start_nodes.size(); ++i) {
-        int current_affection = node_affection_to_start.at(new_possible_start_nodes[i]);
-        if (current_affection >= best_affection) {
-            best_affection = current_affection;
+    for (int i = 0; i < possible_start_nodes.size(); ++i) {
+        const uint32_t node = possible_start_nodes[i];
+        const float current_affection = static_cast<float>(node_affection_to_start.at(node));
+        const float current_other_heuristic_value = static_cast<float>(heuristic_node_values.at(node));
+
+        // apply good heuristic weight here
+        const float current_heuristic_value = current_affection * 0.01 + current_other_heuristic_value;
+        if (current_heuristic_value >= best_heuristic_value) {
+            best_heuristic_value = current_heuristic_value;
             best_start_node = i;
         }
     }
 
-    int second_best_affection = node_affection_to_start.at(new_possible_start_nodes[
-        (best_start_node + 1) % new_possible_start_nodes.size()
+    int second_best_heuristic_value = node_affection_to_start.at(possible_start_nodes[
+        (best_start_node + 1) % possible_start_nodes.size()
     ]);
-    for (int i = 0; i < new_possible_start_nodes.size(); ++i) {
-        int current_affection = node_affection_to_start.at(new_possible_start_nodes[i]);
-        if (i != best_start_node && current_affection >= second_best_affection) {
-            second_best_affection = current_affection;
+    for (int i = 0; i < possible_start_nodes.size(); ++i) {
+        int current_affection = node_affection_to_start.at(possible_start_nodes[i]);
+        if (i != best_start_node && current_affection >= second_best_heuristic_value) {
+            second_best_heuristic_value = current_affection;
         }
     }
 
-    // Using some function f: [1.0;inf] -> [0.5; 1.0]
-    // with f(1.0) = 0.5 and for greater x it gets closer to 1.0
-    // e.g. f(x) = -1 / (x**6 + 1) + 1
-    int shift = 0; // affection can be negative
-    if (second_best_affection <= 0) {
-        shift = -second_best_affection + 1;
-    }
-
-    float ratio = static_cast<float>(best_affection + shift) / static_cast<float>(second_best_affection + shift);
-    float confidence_for_best = (-1.0 / (pow(ratio, 6) + 1)) + 1;
-    if (new_possible_start_nodes.size() == 1) {
-        confidence_for_best = 1.0;
-    }
-    confidence *= confidence_for_best;
-
-
-    uint32_t start_node = new_possible_start_nodes[best_start_node];
+    uint32_t start_node = possible_start_nodes[best_start_node];
     total_order.push_back(start_node);
 
     // Remove the start_node as choosable (by index, not value)
-    new_possible_start_nodes.erase(new_possible_start_nodes.begin() + best_start_node);
+    possible_start_nodes.erase(possible_start_nodes.begin() + best_start_node);
 
     // Removes every edge containing the start_node
     vector<uint32_t> start_node_candidates;
-    auto it = new_edges.find(start_node);
-    if (it != new_edges.end()) {
-        for (const auto& node : it->second) {
-            start_node_candidates.push_back(node);
+    vector<tuple<uint32_t, uint32_t>> edges_to_remove;
+    for (const auto& [edge, weight] : edges) {
+        const auto from = std::get<0>(edge);
+        const auto to = std::get<1>(edge);
+
+        if (from == start_node) {
+            start_node_candidates.push_back(to);
+            heuristic_node_values[to] += weight;
+            edges_to_remove.push_back(edge);
         }
     }
-    for (auto it = new_edges.begin(); it != new_edges.end(); ) {
-        if (it->first == start_node) {
-            it = new_edges.erase(it);
-        } else {
-            // Remove any occurrence of start_node in the value vector
-            auto& vec = it->second;
-            vec.erase(std::remove(vec.begin(), vec.end(), start_node), vec.end());
-            ++it;
-        }
+    for (const auto& edge : edges_to_remove) {
+        edges.erase(edge);
     }
 
     // Finding new possible start nodes
     for (const auto& start_node_candidate : start_node_candidates) {
         bool has_other_incoming = false;
-        for (const auto& edge : new_edges) {
-            bool destinations_contain_candidate = std::find(edge.second.begin(), edge.second.end(), start_node_candidate) != edge.second.end();
-            if (destinations_contain_candidate) {
+        for (const auto& [edge, _weight] : edges) {
+            const auto from = std::get<0>(edge);
+            const auto to = std::get<1>(edge);
+
+            if (to == start_node_candidate) {
                 has_other_incoming = true;
                 break;
             }
         }
         if (!has_other_incoming) {
-            new_possible_start_nodes.push_back(start_node_candidate);
+            possible_start_nodes.push_back(start_node_candidate);
         }
     }
 
     apply_topological_sort(
-        new_possible_start_nodes,
+        possible_start_nodes,
         node_affection_to_start,
-        new_edges,
-        confidence,
+        heuristic_node_values,
+        edges,
         total_order
     );
 }
 
 vector<uint32_t> solve_constraints_with_topological_sort(
     const vector<tuple<uint32_t, uint32_t>>& constraints,
-    const vector<uint32_t>& nodes,
-    float& confidence
+    const vector<uint32_t>& nodes
 ) {
-    unordered_map<uint32_t, vector<uint32_t>> edges;
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges;
     for (const auto& constraint : constraints) {
         const uint32_t source = std::get<0>(constraint);
         const uint32_t dest = std::get<1>(constraint);
@@ -710,15 +695,7 @@ vector<uint32_t> solve_constraints_with_topological_sort(
             continue;
         }
 
-        auto edge_search = edges.find(source);
-        if (edge_search != edges.end()) {
-            if (std::find(edge_search->second.begin(), edge_search->second.end(), dest)
-            == edge_search->second.end()) {
-                edge_search->second.push_back(dest);
-            }
-        } else {
-            edges[source] = {dest};
-        }
+        edges[constraint]++;
     }
 
     // Find possible start nodes (nodes with no incoming edges)
@@ -762,32 +739,19 @@ vector<uint32_t> solve_constraints_with_topological_sort(
         }
     }
 
-    // Sort possible_start_nodes by affection descending before printing
-    std::vector<std::pair<uint32_t, int>> sorted_affection;
-    for (const auto& [node, affection] : node_affection_to_start) {
-        sorted_affection.emplace_back(node, affection);
+    unordered_map<uint32_t, int> heuristic_node_values;
+    for (const auto& node : nodes) {
+        heuristic_node_values[node] = 0;
     }
-    std::sort(sorted_affection.begin(), sorted_affection.end(),
-        [](const auto& a, const auto& b) { return a.second > b.second; });
 
     vector<uint32_t> total_order;
     apply_topological_sort(
         possible_start_nodes,
         node_affection_to_start,
+        heuristic_node_values,
         edges,
-        confidence,
         total_order
     );
-
-    // std::cout << "All possible topological orders:" << endl;
-    // for (const auto& order : all_orders) {
-    //     std::cout << "[ ";
-    //     for (size_t i = 0; i < order.size(); ++i) {
-    //         std::cout << order[i];
-    //         if (i + 1 < order.size()) std::cout << ", ";
-    //     }
-    //     std::cout << " ]" << endl;
-    // }
 
     return total_order;
 }
@@ -813,7 +777,7 @@ vector<uint32_t> order_cycles(
     std::cout << "The confidence of the resolution is " << std::fixed << std::setprecision(2);
     std::cout << (resolve_cycles_confidence * 100) << "%" << endl;
 
-    return solve_constraints_with_topological_sort(constraints, all_cycle_indices, confidence);
+    return solve_constraints_with_topological_sort(constraints, all_cycle_indices);
 }
 
 vector<vector<uint64_t>> get_ordered_cycles(

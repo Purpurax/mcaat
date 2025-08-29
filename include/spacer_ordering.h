@@ -317,14 +317,16 @@ void resolve_cycles_greedy(
  * @post total_order will contain the end result
  * 
  * @param possible_start_nodes Choices for the next node
+ * @param node_affection_to_start Used as a heuristic for what start node to choose next
  * @param edges Used to increase the start nodes list for the next rec call
- * @param possible_choices A total number tracking the choices that are freely made
+ * @param heuristic_node_values The other part of the heuristic to help choose the next start node
  * @param total_order The resulting order
  */
 void apply_topological_sort(
-    const vector<uint32_t>& possible_start_nodes,
-    const unordered_map<uint32_t, vector<uint32_t>>& edges,
-    uint32_t& possible_choices,
+    vector<uint32_t>& possible_start_nodes,
+    const unordered_map<uint32_t, int>& node_affection_to_start,
+    unordered_map<uint32_t, int>& heuristic_node_values,
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges,
     vector<uint32_t>& total_order
 );
 
@@ -347,8 +349,7 @@ void apply_topological_sort(
  */
 vector<uint32_t> solve_constraints_with_topological_sort(
     const vector<tuple<uint32_t, uint32_t>>& constraints,
-    const vector<uint32_t>& nodes,
-    float& confidence
+    const vector<uint32_t>& nodes
 );
 
 /**
