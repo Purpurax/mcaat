@@ -96,49 +96,18 @@ void keep_crispr_regions(
             }
         }
     }
-
-    // std::cout << "Set set for crispr regions is ";
-    // std::cout << cycle_nodes.size() << " nodes" << endl;
-
-    // size_t valid_edge_count = 0;
-    // for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
-    //     if (sdbg.IsValidEdge(node_id)) {
-    //         valid_edge_count++;
-    //     }
-    // }
-    // std::cout << "keep_crispr_regions sdbg has " << valid_edge_count;
-    // std::cout << " valid edges remaining" << endl;
 }
 
 vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
     vector<Graph> subgraphs;
     
-    // Find strongly connected components using Tarjan's algorithm
     TarjanSCC tarjan(sdbg);
     auto components = tarjan.find_components();
-
-    // std::cout << "Components: [";
-    // for (size_t i = 0; i < components.size(); ++i) {
-    //     vector<uint64_t> sorted_component = components[i];
-    //     std::sort(sorted_component.begin(), sorted_component.end());
-    //     std::cout << "[";
-    //     for (size_t j = 0; j < sorted_component.size(); ++j) {
-    //         std::cout << sorted_component[j];
-    //         if (j + 1 < sorted_component.size()) std::cout << ",";
-    //     }
-    //     std::cout << "]";
-    //     if (i + 1 < components.size()) std::cout << ", ";
-    // }
-    // std::cout << "]" << endl;
     
-    // std::cout << "Found " << components.size() << " strongly connected components" << endl;
-    
-    // Convert each component to a SubGraph
     for (size_t comp_idx = 0; comp_idx < components.size(); ++comp_idx) {
         const auto& component = components[comp_idx];
         Graph subgraph;
         
-        // Add all edges within this component
         for (const uint64_t node : component) {
             if (!sdbg.IsValidEdge(node)) continue;
             
@@ -298,10 +267,8 @@ vector<tuple<uint32_t, uint32_t>> every_possible_combination(const vector<uint32
             const uint32_t element_j = v[j];
 
             if (element_i != element_j) {
-                possible_combination.push_back(std::make_tuple(
-                    static_cast<uint32_t>(element_i),
-                    static_cast<uint32_t>(element_j)
-                ));
+                tuple<uint32_t, uint32_t> new_tuple = std::make_tuple(element_i, element_j);
+                possible_combination.push_back(new_tuple);
             }
         }
     }
@@ -440,6 +407,16 @@ vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
         }
 
         if (is_valid_start) {
+            // // Only getting the first constraint of cycle_indices_in_order
+            // uint32_t first_other_cycle_index;
+            // for (const auto& cycle_index : cycle_indices_in_order) {
+            //     if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
+            //         first_other_cycle_index = cycle_index;
+            //         break;
+            //     }
+            // }
+
+            // return {std::make_pair(NOT_IN_ANY_CYCLE_INDEX, first_other_cycle_index)};
             return every_possible_combination(cycle_indices_in_order);
         }
     } else if (cycle_indices_in_order[0] != NOT_IN_ANY_CYCLE_INDEX
@@ -456,6 +433,17 @@ vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
         }
 
         if (is_valid_end) {
+            // // Only getting the constraint just before the outside
+            // uint32_t first_other_cycle_index;
+            // for (int i = cycle_indices_in_order.size() - 1; i >= 0; --i) {
+            //     uint32_t cycle_index = cycle_indices_in_order.at(i);
+            //     if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
+            //         first_other_cycle_index = cycle_index;
+            //         break;
+            //     }
+            // }
+
+            // return {std::make_pair(first_other_cycle_index, NOT_IN_ANY_CYCLE_INDEX)};
             return every_possible_combination(cycle_indices_in_order);
         }
     }
@@ -518,7 +506,7 @@ bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges) {
     return false;
 }
 
-pair<tuple<uint32_t, uint32_t>, float> resolve_cycles_greedy_best_edge(
+pair<tuple<uint32_t, uint32_t>, int> resolve_cycles_greedy_best_edge(
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
 ) {
     tuple<uint32_t, uint32_t> best_edge;
@@ -532,15 +520,15 @@ pair<tuple<uint32_t, uint32_t>, float> resolve_cycles_greedy_best_edge(
         }
     }
 
-    float confidence = static_cast<float>(total_weight - min_weight);
-    confidence /= static_cast<float>(total_weight);
+    // float confidence = static_cast<float>(total_weight - min_weight);
+    // confidence /= static_cast<float>(total_weight);
 
-    return std::make_pair(best_edge, confidence);
+    return std::make_pair(best_edge, min_weight);
 }
 
 void resolve_cycles_greedy(
     vector<tuple<uint32_t, uint32_t>>& constraints,
-    float& confidence
+    unordered_map<uint32_t, int>& heuristic_node_values
 ) {
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
     unordered_map<uint32_t, vector<uint32_t>> edges;
@@ -556,20 +544,29 @@ void resolve_cycles_greedy(
         edges[from].push_back(to);
     }
 
+    // // Debug-help: To display edges as graph
+    // std::cout << "digraph G {" << std::endl;
+    // for (const auto& [edge, weight] : edges_with_weights) {
+    //     std::cout << "    " << std::get<0>(edge) << " -> " << std::get<1>(edge)
+    //               << " [label=\"" << weight << "\"];" << std::endl;
+    // }
+    // std::cout << "}" << std::endl;
+
     vector<tuple<uint32_t, uint32_t>> removed_edges;
 
     while (has_cycle(edges)) {
-        auto result = resolve_cycles_greedy_best_edge(edges_with_weights);
-        auto edge_to_remove = std::get<0>(result);
-        auto edge_remove_confidence = std::get<1>(result);
+        const auto result = resolve_cycles_greedy_best_edge(edges_with_weights);
+        const auto edge_to_remove = std::get<0>(result);
+        const auto weight_of_edge = std::get<1>(result);
 
-        confidence *= edge_remove_confidence;
+        const uint32_t from = std::get<0>(edge_to_remove);
+        const uint32_t to = std::get<1>(edge_to_remove);
+
+        heuristic_node_values[to] -= weight_of_edge;
 
         removed_edges.push_back(edge_to_remove);
         edges_with_weights.erase(edge_to_remove);
         
-        const uint32_t from = std::get<0>(edge_to_remove);
-        const uint32_t to = std::get<1>(edge_to_remove);
         auto it = edges.find(from);
         if (it != edges.end()) {
             auto& vec = it->second;
@@ -605,7 +602,7 @@ void apply_topological_sort(
     if (possible_start_nodes.empty()) {
         return;
     }
-
+    
     // Choose start_node by the heuristic
     int best_start_node = 0;
     float best_heuristic_value = static_cast<float>(node_affection_to_start.at(possible_start_nodes[best_start_node]));
@@ -684,6 +681,7 @@ void apply_topological_sort(
 
 vector<uint32_t> solve_constraints_with_topological_sort(
     const vector<tuple<uint32_t, uint32_t>>& constraints,
+    unordered_map<uint32_t, int>& heuristic_node_values,
     const vector<uint32_t>& nodes
 ) {
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges;
@@ -739,11 +737,6 @@ vector<uint32_t> solve_constraints_with_topological_sort(
         }
     }
 
-    unordered_map<uint32_t, int> heuristic_node_values;
-    for (const auto& node : nodes) {
-        heuristic_node_values[node] = 0;
-    }
-
     vector<uint32_t> total_order;
     apply_topological_sort(
         possible_start_nodes,
@@ -759,8 +752,7 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 vector<uint32_t> order_cycles(
     const Graph& graph,
     const vector<Jump>& jumps,
-    const vector<vector<uint64_t>>& cycles,
-    float& confidence
+    const vector<vector<uint64_t>>& cycles
 ) {
     const auto node_to_cycle_map = get_node_to_unique_cycle_map(cycles);
     const auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
@@ -768,16 +760,16 @@ vector<uint32_t> order_cycles(
 
     std::cout << "      ▸ " << constraints.size() << " constraints derived" << std::endl;
 
-    float resolve_cycles_confidence = 1.0;
-    resolve_cycles_greedy(constraints, resolve_cycles_confidence);
-    confidence *= resolve_cycles_confidence;
+    unordered_map<uint32_t, int> heuristic_node_values;
+    for (const auto& node : all_cycle_indices) {
+        heuristic_node_values[node] = 0;
+    }
+    resolve_cycles_greedy(constraints, heuristic_node_values);
 
     std::cout << "      ▸ " << constraints.size();
-    std::cout << " constraints remain after resolving cycles.";
-    std::cout << "The confidence of the resolution is " << std::fixed << std::setprecision(2);
-    std::cout << (resolve_cycles_confidence * 100) << "%" << endl;
+    std::cout << " constraints remain after resolving cycles." << std::endl;
 
-    return solve_constraints_with_topological_sort(constraints, all_cycle_indices);
+    return solve_constraints_with_topological_sort(constraints, heuristic_node_values, all_cycle_indices);
 }
 
 vector<vector<uint64_t>> get_ordered_cycles(
