@@ -272,6 +272,8 @@ bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges);
  * @internal
  * @brief Returns the edge with the minimum weight and its confidence that it will resolve the cycles
  * 
+ * @todo outdated doc
+ * 
  * The edge with the smallest weight will be returned.
  * The confidence is just the relative weight amount compared to the total weight
  * 
@@ -281,13 +283,15 @@ bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges);
  * 
  * @return Best edge (tuple<uint32_t, uint32_t>) and confidence (float)
  */
-pair<tuple<uint32_t, uint32_t>, float> resolve_cycles_greedy_best_edge(
+pair<tuple<uint32_t, uint32_t>, int> resolve_cycles_greedy_best_edge(
     const unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
 );
 
 /**
  * @internal
  * @brief Resolves any cycles caused when viewing constraints as edges
+ * 
+ * @todo outdated doc
  * 
  * @pre 0.0 < confidence <= 1.0
  * 
@@ -296,11 +300,10 @@ pair<tuple<uint32_t, uint32_t>, float> resolve_cycles_greedy_best_edge(
  * @post 0.0 < confidence <= 1.0
  * 
  * @param constraints Viewed as edges of a graph
- * @param confidence The overall confidence of the spacer ordering
  */
 void resolve_cycles_greedy(
     vector<tuple<uint32_t, uint32_t>>& constraints,
-    float& confidence
+    unordered_map<uint32_t, int>& heuristic_node_values
 );
 
 /**
@@ -342,6 +345,7 @@ void apply_topological_sort(
  * @post The result is a permutation of nodes
  * 
  * @param constraints Used to get an order
+ * @param heuristic_node_values Used for the recursive toposort call
  * @param nodes Result will contain all of these elements
  * @param confidence Shows an estimate of how deterministic the result is
  * 
@@ -349,6 +353,7 @@ void apply_topological_sort(
  */
 vector<uint32_t> solve_constraints_with_topological_sort(
     const vector<tuple<uint32_t, uint32_t>>& constraints,
+    unordered_map<uint32_t, int>& heuristic_node_values,
     const vector<uint32_t>& nodes
 );
 
@@ -365,15 +370,13 @@ vector<uint32_t> solve_constraints_with_topological_sort(
  * @param graph 
  * @param jumps 
  * @param cycles 
- * @param confidence Shows an estimate of how deterministic the result is
  * 
  * @return vector<uint32_t> 
  */
 vector<uint32_t> order_cycles(
     const Graph& graph,
     const vector<Jump>& jumps,
-    const vector<vector<uint64_t>>& cycles,
-    float& confidence
+    const vector<vector<uint64_t>>& cycles
 );
 
 /**

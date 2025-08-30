@@ -514,13 +514,8 @@ int main(int argc, char** argv) {
         auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
         
-        // This decision was made because of how megahit is assembling the de bruijn graph
-        //  Instead of creating an accurate graph, the assembly might create nodes multiple
-        //  times and thereby some crispr arrays might be duplicates
-        //  By testing the example data of latilactobacillus_sakei, which has exactly
-        //  one crispr array, it lead to one valid subproblem and one in which no
-        //  relevant jump was found.
-        //  => Filter the case out, as we assume this is a duplicate problem
+        // The assembly of megahit always assembles the graph in its reverse complement.
+        // We discard the reverse complement by assuming that it won't have any relevant jumps
         if (relevant_jumps.size() == 0 || relevant_cycles.size() < 3) {
             continue;
         }
@@ -536,7 +531,7 @@ int main(int argc, char** argv) {
     cout << "  🔄 Solving " << remaining_subgraphs.size();
     cout << " subproblems..." << endl;
     vector<string> found_crispr_sequences;
-    unordered_map<string, vector<string>> ALL_SYSTEMS;
+    unordered_map<string, vector<string>> all_systems;
     for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
         const auto& subgraph = remaining_subgraphs[idx];
         const auto& relevant_jumps = remaining_jumps[idx];
@@ -554,11 +549,9 @@ int main(int argc, char** argv) {
         cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
         cout << get_cycle_count(cycles_map) << " used" << endl;
 
-        float confidence = 1.0;
-        auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles, confidence);
+        auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles);
 
-        cout << "      ▸ With a confidence of " << std::fixed << std::setprecision(2);
-        cout << (confidence * 100) << "%" << " the order is ";
+        cout << "      ▸ The order is ";
         for (auto node : cycle_order) {
             cout << node << " ";
         }
@@ -572,23 +565,11 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        int number_of_spacers = 0;
         cout << "      ▸ Starting the filter process:" << endl;
-        // todo check if using the subgraph is sufficient instead of the full sdbg
-        auto system = get_systems(sdbg, ordered_cycles, number_of_spacers);
-        ALL_SYSTEMS[system.first] = system.second;
-        {
-            std::ostringstream oss;
-            for (auto it = system.second.rbegin(); it != system.second.rend(); ++it) {
-                oss << system.first;
-                oss << *it;
-            }
-            oss << system.first;
-            if (oss.str().size() > 23) {
-                found_crispr_sequences.push_back(oss.str());
-            }
-        }
-        cout << "        ▸ Number of spacers: " << number_of_spacers;
+        auto [repeat, spacers, full_sequence] = get_systems(sdbg, ordered_cycles);
+        all_systems[repeat] = spacers;
+        found_crispr_sequences.push_back(full_sequence);
+        cout << "        ▸ Number of spacers: " << spacers.size();
         cout << " before cleaning" << endl;
     }
     cout << "  ✅ Completed each subproblem" << endl;
@@ -661,7 +642,7 @@ int main(int argc, char** argv) {
 
     // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
-    CRISPRAnalyzer analyzer(ALL_SYSTEMS, settings.output_file);
+    CRISPRAnalyzer analyzer(all_systems, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
     // %% POST PROCESSING %%

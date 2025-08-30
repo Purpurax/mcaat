@@ -12,6 +12,7 @@
 #include <string>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <set>
 
@@ -70,14 +71,12 @@ void print_sdbg_graph_to_dot_file_convert(const string& lib_file_path);
  * 
  * @param sdbg The graph used for getting the sequences and the repeats
  * @param ordered_cycles The cycles in the correct order containing node ids
- * @param number_of_spacers A number which will have the number of spacers after
  * 
  * @return Returns the repeat sequence and a vector of spacer sequences (pair<string, vector<string>>)
  */
-pair<string, vector<string>> get_systems(
+tuple<string, vector<string>, string> get_systems(
     SDBG& sdbg,
-    const vector<vector<uint64_t>>& ordered_cycles,
-    int& number_of_spacers
+    const vector<vector<uint64_t>>& ordered_cycles
 );
 
 #endif
