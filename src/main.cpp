@@ -568,7 +568,11 @@ int main(int argc, char** argv) {
         cout << "      ▸ Starting the filter process:" << endl;
         auto [repeat, spacers, full_sequence] = get_systems(sdbg, ordered_cycles);
         all_systems[repeat] = spacers;
-        found_crispr_sequences.push_back(full_sequence);
+
+        if (full_sequence.size() >= 23) {
+            found_crispr_sequences.push_back(full_sequence);
+        }
+
         cout << "        ▸ Number of spacers: " << spacers.size();
         cout << " before cleaning" << endl;
     }
