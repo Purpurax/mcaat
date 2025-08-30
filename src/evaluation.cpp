@@ -122,6 +122,10 @@ unordered_map<string, float> compare_to_ground_of_truth(
     unordered_map<string, float> result;
 
     for (const auto& actual_seq : actual_sequences) {
+        if (expected_sequences.size() == 0) {
+            break;
+        }
+        
         // finding match from actual to expected (overestimating in total)
         float best_similarity = -1.0;
         int best_idx = 0;
