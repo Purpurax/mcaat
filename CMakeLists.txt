@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(Threads REQUIRED)
+find_package(BZip2 REQUIRED)
 
 # Options
 option(COVERAGE "Generate coverage report" ON)
