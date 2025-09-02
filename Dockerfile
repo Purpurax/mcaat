@@ -14,11 +14,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Clone your repo (or mount it during build)
+# Clone your repo
 RUN git clone --recurse-submodules https://github.com/RNABioInfo/mcaat.git .
-
-# If needed:
-# RUN git submodule update --init --recursive
 
 RUN mkdir build && cd build && \
     cmake .. && \
@@ -27,10 +24,11 @@ RUN mkdir build && cd build && \
 # Stage 2: Runtime
 FROM debian:bookworm-slim
 
-# Install only runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     libomp5 \
     zlib1g \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
