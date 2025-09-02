@@ -25,6 +25,10 @@
 #include "sdbg/sdbg.h"
 #include "jumps.h"
 
+#include "core/cft.hpp"
+#include "core/Instance.hpp"
+#include "algorithms/Refinement.hpp"
+
 using namespace std;
 
 /**
@@ -153,6 +157,46 @@ vector<vector<uint64_t>> get_relevant_cycles(
     const Graph& graph,
     const unordered_map<uint64_t, vector<vector<uint64_t>>>& all_cycles_map
 );
+
+/**
+ * @brief Discards the cycles that do not contribute new nodes to the total cover
+ * 
+ * Uses min-set-cover to find the relevant cycles and remove the rest
+ * 
+ * @param cycles
+ */
+void get_minimum_cycles_for_full_coverage(vector<vector<uint64_t>>& cycles);
+
+/**
+ * @internal
+ * @brief Solves the min cover problem
+ * 
+ * Given a universe and sets, find the minimum amount of sets,
+ * such that all elements of the universe are in one of those sets.
+ * 
+ * @note Keep in mind that the elements of the universe must be from 0..universe.size()
+ * And the sets contain which columns they satisfy, so from 0..universe.size() again.
+ * 
+ * @param universe All elements
+ * @param sets Sets that are chosen to cover
+ * @return The indices of the sets that are chosen as a solution (vector<size_t>)
+ */
+vector<size_t> solve_min_cover_problem(
+    const unordered_set<uint32_t>& universe,
+    const vector<vector<uint32_t>>& sets
+);
+
+/**
+ * @brief Get the minimum cycles to have a full coverage of nodes
+ * 
+ * Every cycle must have a unique node and therefore contributes to the coverage.
+ * By computing the minimum set cover, only those cycles remain.
+ * 
+ * @post cycles.size() will be the same or smaller
+ * 
+ * @param cycles
+ */
+void get_minimum_cycles_for_full_coverage(vector<vector<uint64_t>>& cycles);
 
 /**
  * @internal
