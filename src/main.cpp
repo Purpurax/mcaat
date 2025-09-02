@@ -656,7 +656,11 @@ int main(int argc, char** argv) {
     // %% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    fs::remove_all(settings.graph_folder);
+    try {
+        fs::remove_all(settings.graph_folder);
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Warning: Could not remove graph folder: " << e.what() << std::endl;
+    }
     // %% DELETE THE GRAPH FOLDER %%            
 }
 #endif
