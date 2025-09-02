@@ -16,6 +16,7 @@
 #include "post_processing.h"
 #include <cctype>
 #include <unordered_map>
+#include "phage_curator.h"
 #ifdef __linux__
 #include <sys/sysinfo.h>
 #elif defined(_WIN32)
@@ -225,6 +226,106 @@ string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
     reverse(label.begin(), label.end());
     return label;
 }
+// int main(int argc, char** argv) {
+//     // %% PARSE ARGUMENTS %%
+//     Settings settings = parse_arguments(argc, argv);
+//     string name_of_genome = "test";
+//     if (check_for_error(settings)){
+//         //tell the user which folder we are deleting
+//         cout<< "Folder " << settings.output_folder << " will be deleted due to errors." << endl;
+        
+//         cout << "Do you want that folder to be removed? (y/n): ";
+//         char answer;
+//         cin >> answer;
+//         if (answer != 'y' && answer != 'Y') {
+//             cout << "Exiting the program." << endl;
+//             return 1;
+//         }
+//         cout << "Removing folder: " << settings.output_folder << endl;
+//         fs::remove_all(settings.output_folder); 
+//         return 1;
+//     }
+//     // %% PARSE ARGUMENTS %%
+
+//     // %% BUILD GRAPH %%
+//      SDBGBuild sdbg_build(settings);
+//     // %% BUILD GRAPH %%
+    
+    
+//     int length_bound = 77;
+//     SDBG sdbg;
+//     string graph_folder_old = settings.graph_folder;
+//     settings.graph_folder= settings.graph_folder+ "/graph"; //"/vol/d/development/git/mcaat_master/mcaat/build/mcaat_run_2025-08-27_09-53-11/graph/graph";
+//     char * cstr = new char [settings.graph_folder.length()+1];
+//     std::strcpy (cstr, settings.graph_folder.c_str());
+//     cout << "Graph folder: " << cstr << endl;
+//     sdbg.LoadFromFile(cstr);
+//     cout << "Loaded the graph" << endl;
+//     /*
+//     string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
+//     uint8_t end_seq[24];
+//     for (int i = 0; i < 23; ++i) {
+//         end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
+//     }
+//     int64_t end_node = sdbg.IndexBinarySearch(end_seq);
+//     cout<<"EdgeMultiplicity: "<<sdbg.EdgeMultiplicity(end_node)<<endl;
+//     cout<<"Indegree: "<<sdbg.EdgeIndegree(end_node)<<endl;
+//     cout<<"Outdegree: "<<sdbg.EdgeOutdegree(end_node)<<endl;
+//     // %% LOAD GRAPH %%
+//     cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
+//     PhageCurator phage_curator(sdbg);
+//     std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_node, 1000,5000);
+//     phage_curator.ReconstructPaths(paths);
+//     for(const auto& sequence : phage_curator.reconstructed_sequences) {
+//         std::cout << sequence << std::endl;
+//     }
+// */
+//     delete[] cstr;
+
+    
+//     // %% FBCE ALGORITHM %%
+//     cout << "FBCE START:" << endl;
+//     auto start_time = chrono::high_resolution_clock::now();
+//     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
+    
+//     int number_of_spacers_total = 0;
+//     auto cycles = cycle_finder.results;
+//     cout << "Number of nodes in results: " << cycles.size() << endl;
+//     // %% FBCE ALGORITHM %%
+    
+//     // ############ DEVELOPMENT ############
+
+//     #ifdef DEVELOP
+//     //io_ops::read_cycles("cycles.json");
+//     //io_ops::write_cycles("out.json", cycles);
+//     //io_ops::write_nodes_gfa("out.gfa", sdbg); // CAREFUL: WILL TAKE A LOT OF SPACE IF GRAPH IS HUGE!
+//     #endif
+
+//     // ############ DEVELOPMENT ############
+
+
+//     int number_of_spacers = 0;
+//     // // %% FILTERS %%
+//      cout << "FILTERS START:" << endl;
+//      Filters filters(sdbg, cycles);
+//      auto  SYSTEMS = filters.ListArrays(number_of_spacers);
+//      cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
+//     // // %% FILTERS %%
+
+
+
+//     // //%% POST PROCESSING %%
+//      cout << "POST PROCESSING START:" << endl;
+//      CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
+//      analyzer.run_analysis();
+//      cout << "Saved in: " << settings.output_file << endl;
+//     //%% POST PROCESSING %%
+
+//     // %% DELETE THE GRAPH FOLDER %%
+//     //fs::remove_all(graph_folder_old);
+//     // %% DELETE THE GRAPH FOLDER %%            
+// }
+
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
     Settings settings = parse_arguments(argc, argv);
@@ -260,15 +361,9 @@ int main(int argc, char** argv) {
     cout << "Graph folder: " << cstr << endl;
     sdbg.LoadFromFile(cstr);
     cout << "Loaded the graph" << endl;
-    string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
-    uint8_t end_seq[24];
-    for (int i = 0; i < 23; ++i) {
-        end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
-    }
-    int64_t end_node = sdbg.IndexBinarySearch(end_seq);
-    // %% LOAD GRAPH %%
-    cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
 
+    // %% LOAD GRAPH %%
+    
     delete[] cstr;
 
     
@@ -276,41 +371,26 @@ int main(int argc, char** argv) {
     cout << "FBCE START:" << endl;
     auto start_time = chrono::high_resolution_clock::now();
     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
-    
     int number_of_spacers_total = 0;
     auto cycles = cycle_finder.results;
     cout << "Number of nodes in results: " << cycles.size() << endl;
     // %% FBCE ALGORITHM %%
     
-    // ############ DEVELOPMENT ############
-
-    #ifdef DEVELOP
-    //io_ops::read_cycles("cycles.json");
-    io_ops::write_cycles("out.json", cycles);
-    io_ops::write_nodes_gfa("out.gfa", sdbg);
-    #endif
-
-    // ############ DEVELOPMENT ############
-
-
-    // int number_of_spacers = 0;
-    // // %% FILTERS %%
-    // cout << "FILTERS START:" << endl;
-    // Filters filters(sdbg, cycles);
-    // auto  SYSTEMS = filters.ListArrays(number_of_spacers);
-    // cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
-    // // %% FILTERS %%
-
-
-
-    // //%% POST PROCESSING %%
-    // cout << "POST PROCESSING START:" << endl;
-    // CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
-    // analyzer.run_analysis();
-    // cout << "Saved in: " << settings.output_file << endl;
+    int number_of_spacers = 0;
+    // %% FILTERS %%
+    cout << "FILTERS START:" << endl;
+    Filters filters(sdbg, cycles);
+    auto  SYSTEMS = filters.ListArrays(number_of_spacers);
+    cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
+    // %% FILTERS %%
+    //%% POST PROCESSING %%
+    cout << "POST PROCESSING START:" << endl;
+    CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
+    analyzer.run_analysis();
+    cout << "Saved in: " << settings.output_file << endl;
     //%% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    //fs::remove_all(graph_folder_old);
+    fs::remove_all(graph_folder_old);
     // %% DELETE THE GRAPH FOLDER %%            
 }

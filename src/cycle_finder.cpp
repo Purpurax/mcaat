@@ -33,7 +33,7 @@ bool CycleFinder::_IncomingNotEqualToCurrentNode(uint64_t node, size_t edge_inde
 /**
  * @brief Performs a background check on a neighbor node to determine if it meets certain criteria.
  */
-bool CycleFinder::_BackgroundCheck(auto original_node, size_t repeat_multiplicity, auto neighbor_node) {
+bool CycleFinder::_BackgroundCheck(uint64_t original_node, size_t repeat_multiplicity, uint64_t neighbor_node) {
     auto neighbor_node_multiplicity = sdbg.EdgeMultiplicity(neighbor_node);
     if(this->visited[neighbor_node]) {
         return false;
@@ -51,7 +51,7 @@ bool CycleFinder::_BackgroundCheck(auto original_node, size_t repeat_multiplicit
 /**
  * @brief Gets the outgoing edges of a node that pass the background check.
  */
-void CycleFinder::_GetOutgoings(auto node, unordered_set<uint64_t>& outgoings_set, size_t repeat_multiplicity) {
+void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoings_set, size_t repeat_multiplicity) {
    
     int edge_outdegree = sdbg.EdgeOutdegree(node);
     if (edge_outdegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -69,7 +69,7 @@ void CycleFinder::_GetOutgoings(auto node, unordered_set<uint64_t>& outgoings_se
 /**
  * @brief Retrieves the incoming edges of a node that pass the background check.
  */
-void CycleFinder::_GetIncomings(auto node, unordered_set<uint64_t>& incomings_set, size_t repeat_multiplicity) {
+void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incomings_set, size_t repeat_multiplicity) {
   
     int edge_indegree = sdbg.EdgeIndegree(node);
     if (edge_indegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -86,7 +86,7 @@ void CycleFinder::_GetIncomings(auto node, unordered_set<uint64_t>& incomings_se
 /**
  * @brief Gets the outgoing edges of a node that pass the background check.
  */
-void CycleFinder::_GetOutgoings(auto node, unordered_set<uint64_t>& outgoings_set) {
+void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoings_set) {
    
     int edge_outdegree = sdbg.EdgeOutdegree(node);
     if (edge_outdegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -104,7 +104,7 @@ void CycleFinder::_GetOutgoings(auto node, unordered_set<uint64_t>& outgoings_se
 /**
  * @brief Retrieves the incoming edges of a node that pass the background check.
  */
-void CycleFinder::_GetIncomings(auto node, unordered_set<uint64_t>& incomings_set) {
+void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incomings_set) {
   
     int edge_indegree = sdbg.EdgeIndegree(node);
     if (edge_indegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -319,7 +319,7 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
                 size_t edge_outdegree = this->sdbg.EdgeOutdegree(node);
                 loaded+=1; 
                 if(loaded % 10000000 == 0) std::cout << "Loaded " << loaded << " nodes\n";
-                if (edge_indegree >= 2 && this->sdbg.EdgeMultiplicity(node) > 5)
+                if (edge_indegree >= 2 && this->sdbg.EdgeMultiplicity(node) > 20)
                 {
                     
                     if(this->_IncomingNotEqualToCurrentNode(node,edge_indegree)) continue;
@@ -329,6 +329,7 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
                     if(!dls) continue; //|-> the last version!
             
                     double log2_mult = ceil(log2(double(this->sdbg.EdgeMultiplicity(node))));
+                    #pragma omp critical
                     start_nodes_chunked[log2_mult].push_back(node);
             }
         }
