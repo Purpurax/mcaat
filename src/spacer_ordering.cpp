@@ -187,6 +187,89 @@ vector<vector<uint64_t>> get_relevant_cycles(
     return relevant_cycles;
 }
 
+void get_minimum_cycles_for_full_coverage(vector<vector<uint64_t>>& cycles) {
+    unordered_set<uint32_t> universe;
+    vector<vector<uint32_t>> sets;
+
+    unordered_map<uint64_t, uint32_t> node_id_map;
+    uint32_t problem_element_counter = 0;
+    for (const auto& cycle : cycles) {
+        vector<uint32_t> set;
+
+        for (const auto& node : cycle) {
+            uint32_t mapped_value;
+            if (node_id_map.find(node) != node_id_map.end()) {
+                mapped_value = node_id_map[node];
+            } else {
+                node_id_map[node] = problem_element_counter;
+                mapped_value = problem_element_counter++;
+            }
+
+            set.push_back(mapped_value);
+            universe.insert(mapped_value);
+        }
+
+        sets.push_back(set);
+    }
+
+    vector<size_t> kept_indices = solve_min_cover_problem(universe, sets);
+    std::sort(kept_indices.begin(), kept_indices.end(), std::greater<size_t>());
+    
+    for (int i = cycles.size() - 1; i >= 0; --i) {
+        if (std::find(kept_indices.begin(), kept_indices.end(), i) != kept_indices.end()) {
+            continue;
+        }
+
+        cycles.erase(cycles.begin() + i);
+    }
+}
+
+vector<size_t> solve_min_cover_problem(
+    const unordered_set<uint32_t>& universe,
+    const vector<vector<uint32_t>>& sets
+) {
+    if (universe.empty() || sets.empty()) {
+        std::cout << "Error: Unable to find min cover as the universe or sets are empty" << std::endl;
+        return {};
+    }
+    for (const auto& element : universe) {
+        if (element >= universe.size()) {
+            std::cout << "Error: Unable to find min cover as the universe elements are invalid" << std::endl;
+            return {};
+        }
+    }
+    for (const auto& set : sets) {
+        for (const auto& element : set) {
+            if (element >= universe.size()) {
+                std::cout << "Error: Unable to find min cover as the sets elements are invalid" << std::endl;
+                return {};
+            }
+        }
+    }
+
+    auto set_cover_instance = cft::Instance();
+
+    for (const auto& set : sets) {
+        set_cover_instance.cols.push_back(set);
+        set_cover_instance.costs.push_back(1.0);
+    }
+
+    cft::fill_rows_from_cols(set_cover_instance.cols, universe.size(), set_cover_instance.rows);
+    
+    auto env = cft::Environment();
+    env.time_limit = 10.0;
+    env.verbose = 5;
+    env.timer.restart();
+    env.verbose = false;
+
+    vector<size_t> result;
+    if (!sets.empty() && !universe.empty()) {
+        const auto solution = cft::run(env, set_cover_instance);
+        result = vector<size_t>(solution.sol.idxs.begin(), solution.sol.idxs.end());
+    }
+    return result;
+}
+
 unordered_map<uint64_t, uint32_t> get_node_to_unique_cycle_map(
     const vector<vector<uint64_t>>& cycles
 ) {
@@ -613,7 +696,7 @@ void apply_topological_sort(
         const float current_other_heuristic_value = static_cast<float>(heuristic_node_values.at(node));
 
         // apply good heuristic weight here
-        const float current_heuristic_value = current_affection * 0.01 + current_other_heuristic_value;
+        const float current_heuristic_value = current_affection * 1.0 + current_other_heuristic_value;
         if (current_heuristic_value >= best_heuristic_value) {
             best_heuristic_value = current_heuristic_value;
             best_start_node = i;

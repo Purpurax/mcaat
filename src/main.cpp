@@ -511,8 +511,10 @@ int main(int argc, char** argv) {
     vector<vector<vector<size_t>>> remaining_cycles;
     for (size_t idx = 0; idx < subgraphs.size(); ++idx) {
         const auto& subgraph = subgraphs[idx];
-        auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
+        const auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
         auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
+
+        get_minimum_cycles_for_full_coverage(relevant_cycles);
         
         // The assembly of megahit always assembles the graph in its reverse complement.
         // We discard the reverse complement by assuming that it won't have any relevant jumps
@@ -616,7 +618,7 @@ int main(int argc, char** argv) {
         );
 
         size_t no_match_count = 0;
-        float overall_similarity = 1.0;
+        float average_similarity = 0.0;
         for (const auto& [sequence, similarity] : benchmark_results) {
             if (similarity == -1.0) {
                 cout << "    ▸ No expected match for sequence: ";
@@ -626,12 +628,14 @@ int main(int argc, char** argv) {
                 cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
                 cout << (similarity * 100) << "% similarity for sequence: ";
                 cout << sequence << endl;
-                overall_similarity *= similarity;
+                average_similarity += similarity;
             }
         }
+        average_similarity /= static_cast<float>(benchmark_results.size());
 
-        cout << "  ▸ The overall similarity is ≥";
-        cout << std::fixed << std::setprecision(2) << (overall_similarity * 100);
+        cout << "  ▸ The average similarity is ";
+        cout << std::fixed << std::setprecision(2);
+        cout << (average_similarity * 100);
         cout << "% with " << no_match_count << "/" << benchmark_results.size();
         cout << " ignored" << endl;
 
