@@ -77,7 +77,7 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     }
     uint64_t incomings[edge_indegree];
     int flag =sdbg.IncomingEdges(node, incomings);
-    if (flag==-1)
+    if (flag!=-1)
         for (const auto& incoming : incomings)
             if (this->_BackgroundCheck(node, repeat_multiplicity, incoming))
                 incomings_set.insert(incoming);
