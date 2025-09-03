@@ -7,7 +7,23 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 
-find_package(ZLIB REQUIRED)
+# Add optimization flags for performance
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -flto")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
+
+find_package(ZLIB)
+if(NOT ZLIB_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG v1.3.1
+    )
+    FetchContent_MakeAvailable(zlib)
+    set(ZLIB_LIBRARIES zlibstatic)
+    set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+endif()
+
 find_package(OpenMP REQUIRED)
 find_package(Threads REQUIRED)
 
