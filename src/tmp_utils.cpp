@@ -23,10 +23,10 @@ pair<string, optional<string>> get_fastq_files_from_settings(
     }
 }
 
-size_t get_cycle_count(
+int get_cycle_count(
     const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
 ) {
-    size_t count = 0;
+    int count = 0;
     for (const auto& pair : cycles_map) {
         count += pair.second.size();
     }

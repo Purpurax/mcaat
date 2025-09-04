@@ -137,7 +137,7 @@ vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
 
 vector<Graph> get_crispr_regions(
     SDBG& sdbg,
-    unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
+    const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
 ) {
     vector<vector<uint64_t>> cycles;
     for (const auto& [_start_node, cycles_of_start_node] : cycles_map) {

@@ -49,9 +49,9 @@ pair<string, optional<string>> get_fastq_files_from_settings(
 /**
  * @brief Get the cycle count from the special object
  * 
- * @return The cycle count (size_t)
+ * @return The cycle count (int)
  */
-size_t get_cycle_count(
+int get_cycle_count(
     const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
 );
 
