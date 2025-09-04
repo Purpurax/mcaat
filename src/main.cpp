@@ -312,7 +312,7 @@ int main(int argc, char** argv) {
 
     
     cout << "  ▸ Splitting into subproblems" << endl;
-    auto subgraphs = get_crispr_regions(sdbg, cycles_map);
+    auto subgraphs = get_crispr_regions_extended_by_k(sdbg, 150, cycles_map);
 
     cout << "  🔄 Filtering subproblems:" << endl;
     vector<Graph> remaining_subgraphs;

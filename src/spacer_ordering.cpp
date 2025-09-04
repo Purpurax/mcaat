@@ -77,22 +77,64 @@ public:
     }
 };
 
-void keep_crispr_regions(
+void keep_crispr_regions_extended_by_k(
     SDBG& sdbg,
+    const size_t& k,
     const vector<vector<uint64_t>>& cycles
 ) {
-    unordered_set<uint64_t> cycle_nodes;
+    unordered_set<uint64_t> cycle_edges;
     for (const auto& cycle : cycles) {
-        for (uint64_t node : cycle) {
-            cycle_nodes.insert(node);
+        for (uint64_t edge : cycle) {
+            cycle_edges.insert(edge);
         }
     }
 
-    for (uint64_t node_id = 0; node_id < sdbg.size(); ++node_id) {
-        if (sdbg.IsValidEdge(node_id)) {
-            // If this node is not in any cycle, invalidate it
-            if (cycle_nodes.find(node_id) == cycle_nodes.end()) {
-                sdbg.SetInvalidEdge(node_id);
+    // Extend cycle_edges by k
+    int loop_counter = 0;
+    while (loop_counter < k) {
+        ++loop_counter;
+        vector<uint64_t> new_edges;
+
+        for (const auto& edge : cycle_edges) {
+            if (!sdbg.IsValidEdge(edge)) {
+                continue;
+            }
+
+            int indegree = sdbg.EdgeIndegree(edge);
+            if (indegree > 0) {
+                uint64_t* incomings = new uint64_t[indegree];
+                if (sdbg.IncomingEdges(edge, incomings) != -1) {
+                    for (int i = 0; i < indegree; ++i) {
+                        const uint64_t neighbor = incomings[i];
+                        new_edges.push_back(neighbor);
+                    }
+                }
+                delete[] incomings;
+            }
+
+            int outdegree = sdbg.EdgeOutdegree(edge);
+            if (outdegree > 0) {
+                uint64_t* outgoings = new uint64_t[outdegree];
+                if (sdbg.OutgoingEdges(edge, outgoings) != -1) {
+                    for (int i = 0; i < outdegree; ++i) {
+                        const uint64_t neighbor = outgoings[i];
+                        new_edges.push_back(neighbor);
+                    }
+                }
+                delete[] outgoings;
+            }
+        }
+
+        for (const auto& edge : new_edges) {
+            cycle_edges.insert(edge);
+        }
+    }
+
+    for (uint64_t edge_id = 0; edge_id < sdbg.size(); ++edge_id) {
+        if (sdbg.IsValidEdge(edge_id)) {
+            // If this edge is not in any cycle, invalidate it
+            if (cycle_edges.find(edge_id) == cycle_edges.end()) {
+                sdbg.SetInvalidEdge(edge_id);
             }
         }
     }
@@ -108,18 +150,18 @@ vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
         const auto& component = components[comp_idx];
         Graph subgraph;
         
-        for (const uint64_t node : component) {
-            if (!sdbg.IsValidEdge(node)) continue;
+        for (const uint64_t edge_id : component) {
+            if (!sdbg.IsValidEdge(edge_id)) continue;
             
-            int outdegree = sdbg.EdgeOutdegree(node);
+            int outdegree = sdbg.EdgeOutdegree(edge_id);
             if (outdegree > 0) {
                 uint64_t* outgoings = new uint64_t[outdegree];
-                if (sdbg.OutgoingEdges(node, outgoings) != -1) {
+                if (sdbg.OutgoingEdges(edge_id, outgoings) != -1) {
                     for (int i = 0; i < outdegree; ++i) {
                         const uint64_t neighbor = outgoings[i];
                         // Only add edge if neighbor is in the same component
                         if (std::find(component.begin(), component.end(), neighbor) != component.end()) {
-                            subgraph.add_edge(node, neighbor);
+                            subgraph.add_edge(edge_id, neighbor);
                         }
                     }
                 }
@@ -135,8 +177,9 @@ vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
     return subgraphs;
 }
 
-vector<Graph> get_crispr_regions(
+vector<Graph> get_crispr_regions_extended_by_k(
     SDBG& sdbg,
+    const size_t& k,
     const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
 ) {
     vector<vector<uint64_t>> cycles;
@@ -146,7 +189,7 @@ vector<Graph> get_crispr_regions(
         }
     }
 
-    keep_crispr_regions(sdbg, cycles);
+    keep_crispr_regions_extended_by_k(sdbg, k, cycles);
     return divide_graph_into_subgraphs(sdbg);
 }
 
@@ -490,17 +533,17 @@ vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
         }
 
         if (is_valid_start) {
-            // // Only getting the first constraint of cycle_indices_in_order
-            // uint32_t first_other_cycle_index;
-            // for (const auto& cycle_index : cycle_indices_in_order) {
-            //     if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
-            //         first_other_cycle_index = cycle_index;
-            //         break;
-            //     }
-            // }
+            // Only getting the first constraint of cycle_indices_in_order
+            uint32_t first_other_cycle_index;
+            for (const auto& cycle_index : cycle_indices_in_order) {
+                if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
+                    first_other_cycle_index = cycle_index;
+                    break;
+                }
+            }
 
-            // return {std::make_pair(NOT_IN_ANY_CYCLE_INDEX, first_other_cycle_index)};
-            return every_possible_combination(cycle_indices_in_order);
+            return {std::make_pair(NOT_IN_ANY_CYCLE_INDEX, first_other_cycle_index)};
+            // return every_possible_combination(cycle_indices_in_order);
         }
     } else if (cycle_indices_in_order[0] != NOT_IN_ANY_CYCLE_INDEX
     && cycle_indices_in_order[cycle_indices_in_order.size() - 1] == NOT_IN_ANY_CYCLE_INDEX) {
@@ -516,18 +559,18 @@ vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
         }
 
         if (is_valid_end) {
-            // // Only getting the constraint just before the outside
-            // uint32_t first_other_cycle_index;
-            // for (int i = cycle_indices_in_order.size() - 1; i >= 0; --i) {
-            //     uint32_t cycle_index = cycle_indices_in_order.at(i);
-            //     if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
-            //         first_other_cycle_index = cycle_index;
-            //         break;
-            //     }
-            // }
+            // Only getting the constraint just before the outside
+            uint32_t first_other_cycle_index;
+            for (int i = cycle_indices_in_order.size() - 1; i >= 0; --i) {
+                uint32_t cycle_index = cycle_indices_in_order.at(i);
+                if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
+                    first_other_cycle_index = cycle_index;
+                    break;
+                }
+            }
 
-            // return {std::make_pair(first_other_cycle_index, NOT_IN_ANY_CYCLE_INDEX)};
-            return every_possible_combination(cycle_indices_in_order);
+            return {std::make_pair(first_other_cycle_index, NOT_IN_ANY_CYCLE_INDEX)};
+            // return every_possible_combination(cycle_indices_in_order);
         }
     }
     

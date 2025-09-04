@@ -9,7 +9,7 @@
  * - Functions to combine cycles into ordered node sequences.
  *
  * Main public functions:
- * - get_crispr_regions
+ * - get_crispr_regions_extended_by_k
  * - get_relevant_jumps
  * - get_relevant_cycles
  * - order_cycles
@@ -78,15 +78,16 @@ struct TupleHash {
 
 /**
  * @internal
- * @brief Reduces the succinct de bruijn graphs edges to only have edges that can be found in the cycles
- * 
- * @post sdbg will only have edges that can be found in the cycles
+ * @brief Reduces the succinct de bruijn graphs edges to only have edges
+ * that can be found in the cycles (and others with a distance of k)
  * 
  * @param sdbg The Succinct De Bruijn Graph that should be modified
+ * @param k How many edges it should extend from that region
  * @param cycles The cycles that determine which edge is kept
  */
-void keep_crispr_regions(
+void keep_crispr_regions_extended_by_k(
     SDBG& sdbg,
+    const size_t& k,
     const vector<vector<uint64_t>>& cycles
 );
 
@@ -105,17 +106,17 @@ void keep_crispr_regions(
 vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg);
 
 /**
- * @brief Creates the subgraphs from the total graph reduced to the cycles
- * 
- * @todo change parameters type cycles to a more meaningful type
+ * @brief Creates the subgraphs from the total graph reduced to the cycles extended by k
  * 
  * @param sdbg The Succinct De Bruijn Graph
+ * @param k Extend the region by k edges in all directions
  * @param cycles The cycles outlining the subgraphs
  * 
  * @return The subgraphs (vector<Graph>)
  */
-vector<Graph> get_crispr_regions(
+vector<Graph> get_crispr_regions_extended_by_k(
     SDBG& sdbg,
+    const size_t& k,
     const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles
 );
 
