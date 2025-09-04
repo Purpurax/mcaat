@@ -115,33 +115,24 @@ float get_similarity(const string& s1, const string& s2) {
     return 1.0 - (static_cast<float>(d) / static_cast<float>(max_size));
 }
 
-unordered_map<string, float> compare_to_ground_of_truth(
-    const vector<string>& actual_sequences,
+float compare_sequence_to_ground_of_truth(
+    const string& sequence,
     vector<string>& expected_sequences
 ) {
-    unordered_map<string, float> result;
+    float best_similarity = -1.0;
+    int best_idx = -1;
+    for (int i = 0; i < expected_sequences.size(); ++i) {
+        string expected_sequence = expected_sequences.at(i);
+        float current_similarity = get_similarity(sequence, expected_sequence);
 
-    for (const auto& actual_seq : actual_sequences) {
-        if (expected_sequences.size() == 0) {
-            break;
+        if (current_similarity > best_similarity) {
+            best_similarity = current_similarity;
+            best_idx = i;
         }
-        
-        // finding match from actual to expected (overestimating in total)
-        float best_similarity = -1.0;
-        int best_idx = 0;
-        for (int i = 0; i < expected_sequences.size(); ++i) {
-            string expected_sequence = expected_sequences.at(i);
-            float current_similarity = get_similarity(actual_seq, expected_sequence);
-
-            if (current_similarity > best_similarity) {
-                best_similarity = current_similarity;
-                best_idx = i;
-            }
-        }
-
-        result.insert({actual_seq, best_similarity});
-        expected_sequences.erase(expected_sequences.begin() + best_idx);
     }
 
-    return result;
+    if (best_idx != -1) {
+        expected_sequences.erase(expected_sequences.begin() + best_idx);
+    }
+    return best_similarity;
 }

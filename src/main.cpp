@@ -532,8 +532,7 @@ int main(int argc, char** argv) {
     
     cout << "  🔄 Solving " << remaining_subgraphs.size();
     cout << " subproblems..." << endl;
-    vector<string> found_crispr_sequences;
-    unordered_map<string, vector<string>> all_systems;
+    vector<tuple<string, string, vector<string>>> found_systems;
     for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
         const auto& subgraph = remaining_subgraphs[idx];
         const auto& relevant_jumps = remaining_jumps[idx];
@@ -569,14 +568,14 @@ int main(int argc, char** argv) {
 
         cout << "      ▸ Starting the filter process:" << endl;
         auto [repeat, spacers, full_sequence] = get_systems(sdbg, ordered_cycles);
-        all_systems[repeat] = spacers;
+        
+        cout << "        ▸ Number of spacers: " << spacers.size() << endl;
 
         if (full_sequence.size() >= 23) {
-            found_crispr_sequences.push_back(full_sequence);
+            found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers));
+        } else {
+            cout << "        ▸ The sequence is discarded as it is shorter than 23" << endl;
         }
-
-        cout << "        ▸ Number of spacers: " << spacers.size();
-        cout << " before cleaning" << endl;
     }
     cout << "  ✅ Completed each subproblem" << endl;
 
@@ -608,35 +607,36 @@ int main(int argc, char** argv) {
             cout << "Loaded " << benchmark_sequences.size() << " benchmark sequences." << endl;
         }
 
-        cout << "  ▸ " << found_crispr_sequences.size();
+        cout << "  ▸ " << found_systems.size();
         cout << " crispr sequences are found and benchmarked using ";
         cout << benchmark_sequences.size() << " sequences" << endl;
 
-        const auto benchmark_results = compare_to_ground_of_truth(
-            found_crispr_sequences,
-            benchmark_sequences
-        );
-
         size_t no_match_count = 0;
         float average_similarity = 0.0;
-        for (const auto& [sequence, similarity] : benchmark_results) {
+        for (const auto& [sequence, _repeat, spacers] : found_systems) {
+            const auto similarity = compare_sequence_to_ground_of_truth(
+                sequence,
+                benchmark_sequences
+            );
+
             if (similarity == -1.0) {
                 cout << "    ▸ No expected match for sequence: ";
                 cout << sequence << endl;
                 no_match_count++;
             } else {
                 cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
-                cout << (similarity * 100) << "% similarity for sequence: ";
+                cout << (similarity * 100) << "% similarity with ";
+                cout << spacers.size() << " spacers and sequence: ";
                 cout << sequence << endl;
                 average_similarity += similarity;
             }
         }
-        average_similarity /= static_cast<float>(benchmark_results.size());
+        average_similarity /= static_cast<float>(found_systems.size() - no_match_count);
 
         cout << "  ▸ The average similarity is ";
         cout << std::fixed << std::setprecision(2);
         cout << (average_similarity * 100);
-        cout << "% with " << no_match_count << "/" << benchmark_results.size();
+        cout << "% with " << no_match_count << "/" << found_systems.size();
         cout << " ignored" << endl;
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -650,6 +650,10 @@ int main(int argc, char** argv) {
 
     // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
+    unordered_map<string, vector<string>> all_systems;
+    for (const auto& [_sequence, repeat, spacers] : found_systems) {
+        all_systems[repeat] = spacers;
+    }
     CRISPRAnalyzer analyzer(all_systems, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
