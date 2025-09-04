@@ -76,26 +76,20 @@ uint16_t get_levenshtein_distance(const string& s1, const string& s2);
 float get_similarity(const string& s1, const string& s2);
 
 /**
- * @brief Returns a similarity value for each sequences in actual_sequences
+ * @brief Returns a similarity value of the sequence to the best matching expected sequences
  * 
- * Overall it overestimates the similarity values using greedy. It cannot be exact
- * as it is difficult to find the matching sequences from actual and expected.
+ * Overall it overestimates the similarity values finding a greedy match and removing that match from the expected sequences.
  * 
- * If actual_sequences.size() > expected_sequences.size() then
- * the last few entries will have -1.0
+ * @post expected_sequence will be modified and one elements will be removed (if possible)
  * 
- * If actual_sequences.size() < expected_sequences.size() then
- * the rest of the expected are ignored and not used
- * 
- * @post expected_sequence will be modified and elements will be removed
- * 
- * @param actual_sequences The actual result
+ * @param sequence The actual result
  * @param expected_sequences The expected true result
  * 
- * @return A map from sequence to (overestimated) similarity (unordered_map<string, float>) 
+ * @return -1.0, if expected sequence is empty(float)
+ * @return 0.0 <= similarity <= 1.0 (float) 
  */
-unordered_map<string, float> compare_to_ground_of_truth(
-    const vector<string>& actual_sequences,
+float compare_sequence_to_ground_of_truth(
+    const string& sequence,
     vector<string>& expected_sequences
 );
 
