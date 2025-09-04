@@ -66,7 +66,7 @@ void print_sdbg_graph_to_dot_file_convert(const string& lib_file_path) {
 }
 
 
-string FetchNodeLabel(SDBG& sdbg, const size_t& node) {
+string fetch_node_label(SDBG& sdbg, const size_t& node) {
     string label;
     uint8_t seq[sdbg.k()];
     uint32_t t = sdbg.GetLabel(node, seq);
@@ -161,7 +161,7 @@ pair<vector<uint64_t>, string> Find_CRISPR_repeat_nodes_and_sequence(
                 passed_spacers = true;
                 if (going_through_repeat_region) {
                     // Idk why, but one letter is missing
-                    char new_char = FetchNodeLabel(sdbg, node).back();
+                    char new_char = fetch_node_label(sdbg, node).back();
                     string new_char_str(1, new_char);
                     repeat += new_char_str;
                     break;
@@ -169,9 +169,9 @@ pair<vector<uint64_t>, string> Find_CRISPR_repeat_nodes_and_sequence(
             } else if (passed_spacers) {
                 going_through_repeat_region = true;
                 if (repeat == "") {
-                    repeat = FetchNodeLabel(sdbg, node);
+                    repeat = fetch_node_label(sdbg, node);
                 } else {
-                    char new_char = FetchNodeLabel(sdbg, node).back();
+                    char new_char = fetch_node_label(sdbg, node).back();
                     string new_char_str(1, new_char);
                     repeat += new_char_str;
                 }
@@ -212,9 +212,9 @@ tuple<string, vector<string>, string> get_systems(
                 } else if (passed_repeat) {
                     going_through_spacer_region = true;
                     if (spacer == "") {
-                        spacer = FetchNodeLabel(sdbg, node);
+                        spacer = fetch_node_label(sdbg, node);
                     } else {
-                        char new_char = FetchNodeLabel(sdbg, node).back();
+                        char new_char = fetch_node_label(sdbg, node).back();
                         string new_char_str(1, new_char);
                         spacer += new_char_str;
                     }
