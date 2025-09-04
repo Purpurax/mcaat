@@ -22,7 +22,6 @@
 #endif
 
 #include "cycle_finder.h"
-#include "cycle_filter.h"
 #include "filters.h"
 #include "jumps.h"
 #include "post_processing.h"
@@ -469,14 +468,14 @@ int main(int argc, char** argv) {
     cout << "Number of nodes in results: " << cycles_map.size() << endl;
     // %% FBCE ALGORITHM %%
     
-    // %% FILTER CYCLES %%
-    cout << "FILTER CYCLES START:" << endl;
-    int amount_of_cycles_before = get_cycle_count(cycles_map);
-    // keep_relevant_cycles(cycles_map);
-    int amount_of_cycles_after = get_cycle_count(cycles_map);
-    cout << amount_of_cycles_after << " out of ";
-    cout << amount_of_cycles_before << " are kept" << endl;
-    // %% FILTER CYCLES %%
+    // // %% FILTER CYCLES %%
+    // cout << "FILTER CYCLES START:" << endl;
+    // int amount_of_cycles_before = get_cycle_count(cycles_map);
+    // // keep_relevant_cycles(cycles_map);
+    // int amount_of_cycles_after = get_cycle_count(cycles_map);
+    // cout << amount_of_cycles_after << " out of ";
+    // cout << amount_of_cycles_before << " are kept" << endl;
+    // // %% FILTER CYCLES %%
 
     std::chrono::_V2::system_clock::time_point start_time;
     std::chrono::_V2::system_clock::time_point end_time;
