@@ -188,10 +188,8 @@ tuple<string, vector<string>, string> get_systems(
     SDBG& sdbg,
     vector<vector<uint64_t>>& ordered_cycles
 ) {
-    unordered_set<uint64_t> repeat_nodes;
-
     /* 1. Find all repeat nodes by thresholding */
-    const int threshold = static_cast<int>(0.9 * static_cast<float>(ordered_cycles.size()));
+    unordered_set<uint64_t> repeat_nodes;
     
     unordered_map<uint64_t, int> element_count;
     for (const auto& cycle : ordered_cycles) {
@@ -199,13 +197,17 @@ tuple<string, vector<string>, string> get_systems(
             element_count[element]++;
         }
     }
-
-    for (const auto& cycle : ordered_cycles) {
-        for (const auto& element : cycle) {
-            if (element_count[element] >= threshold) {
-                repeat_nodes.insert(element);
+    
+    int threshold = static_cast<int>(0.9 * static_cast<float>(ordered_cycles.size()));
+    while (repeat_nodes.empty()) {
+        for (const auto& cycle : ordered_cycles) {
+            for (const auto& element : cycle) {
+                if (element_count[element] >= threshold) {
+                    repeat_nodes.insert(element);
+                }
             }
         }
+        --threshold;
     }
 
     /* 2. Align the ordered_cycles to some repeat node (most commonly appearing repeat node) */
