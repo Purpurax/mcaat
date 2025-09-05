@@ -186,57 +186,245 @@ pair<vector<uint64_t>, string> Find_CRISPR_repeat_nodes_and_sequence(
 
 tuple<string, vector<string>, string> get_systems(
     SDBG& sdbg,
-    const vector<vector<uint64_t>>& ordered_cycles
+    vector<vector<uint64_t>>& ordered_cycles
 ) {
-    auto [repeat_nodes, repeat] = Find_CRISPR_repeat_nodes_and_sequence(sdbg, ordered_cycles);
+    unordered_set<uint64_t> repeat_nodes;
+
+    /* 1. Find all repeat nodes by thresholding */
+    const int threshold = static_cast<int>(0.9 * static_cast<float>(ordered_cycles.size()));
     
-    vector<string> spacers;
+    unordered_map<uint64_t, int> element_count;
     for (const auto& cycle : ordered_cycles) {
+        for (const auto& element : cycle) {
+            element_count[element]++;
+        }
+    }
+
+    for (const auto& cycle : ordered_cycles) {
+        for (const auto& element : cycle) {
+            if (element_count[element] >= threshold) {
+                repeat_nodes.insert(element);
+            }
+        }
+    }
+
+    /* 2. Align the ordered_cycles to some repeat node (most commonly appearing repeat node) */
+    /* Finding cycle, probably containing consensus repeat */
+    int consensus_repeat_cycle_idx = 0;
+    int repeat_nodes_count = 0;
+    for (int i = 0; i < ordered_cycles.size(); ++i) {
+        const auto cycle = ordered_cycles.at(i);
+        
+        int current_repeat_nodes_count = 0;
+        for (const auto& element : cycle) {
+            if (repeat_nodes.find(element) != repeat_nodes.end()) {
+                current_repeat_nodes_count += element_count[element];
+            }
+        }
+
+        if (current_repeat_nodes_count > repeat_nodes_count) {
+            repeat_nodes_count = current_repeat_nodes_count;
+            consensus_repeat_cycle_idx = i;
+        }
+    }
+
+    /* Naively finding first repeat node */
+    const auto& consensus_cycle = ordered_cycles.at(consensus_repeat_cycle_idx);
+    uint64_t start_repeat_node = std::numeric_limits<uint64_t>::max();
+    for (int i = 0; i < consensus_cycle.size(); ++i) {
+        const auto before_before_node = consensus_cycle.at((i - 2 + consensus_cycle.size()) % consensus_cycle.size());
+        const auto before_node = consensus_cycle.at((i - 1 + consensus_cycle.size()) % consensus_cycle.size());
+        const auto node = consensus_cycle.at(i);
+
+        if (repeat_nodes.find(node) != repeat_nodes.end()) {
+            if (start_repeat_node == std::numeric_limits<uint64_t>::max()) {
+                // Have some repeat node in the variable
+                start_repeat_node = node;
+            } else if (repeat_nodes.find(before_node) == repeat_nodes.end()
+                && repeat_nodes.find(before_before_node) == repeat_nodes.end()) {
+                // Before and Before_before are spacers
+                start_repeat_node = node;
+            }
+        }
+    }
+
+    /* Align cycles (that can be aligned) */
+    vector<int> aligned_cycles_indices;
+    for (int i = 0; i < ordered_cycles.size(); ++i) {
+        const auto& cycle = ordered_cycles.at(i);
+        auto start_repeat_node_position = std::find(cycle.begin(), cycle.end(), start_repeat_node);
+        if (start_repeat_node_position == cycle.end()) {
+            continue;
+        }
+        aligned_cycles_indices.push_back(i);
+        
+        vector<uint64_t> aligned_cycle;
+        int offset = std::distance(cycle.begin(), start_repeat_node_position);
+        for (int j = 0; j < cycle.size(); ++j) {
+            const auto node = cycle.at((j + offset) % cycle.size());
+            aligned_cycle.push_back(node);
+        }
+        ordered_cycles[i] = aligned_cycle;
+    }
+
+    /* 3. Turn cycles into sequence */
+    vector<string> cycles_str;
+    for (const auto& cycle : ordered_cycles) {
+        string cycle_str = "";
+        for (const auto& node : cycle) {
+            const auto label = fetch_node_label(sdbg, node);
+            cycle_str.push_back(label.back());
+        }
+        cycles_str.push_back(cycle_str);
+    }
+
+    /* 4. Barrel shift until the sequence is: RRRRRSSSSS */
+    /* Get amount of repeat character matches left and right */
+    const string& consensus_cycle_str = cycles_str.at(consensus_repeat_cycle_idx);
+    vector<int> repeat_chr_matches_left;
+    vector<int> repeat_chr_matches_right;
+    for (const auto& idx : aligned_cycles_indices) {
+        if (idx == consensus_repeat_cycle_idx) {
+            continue;
+        }
+
+        const auto& cycle_str = cycles_str.at(idx);
+
+        int current_match_right = 0;
+        for (int i = 0; i < cycle_str.size(); ++i) {
+            const char current = cycle_str.at(i);
+            const char consensus = consensus_cycle_str.at(i);
+
+            if (current != consensus) {
+                break;
+            }
+            ++current_match_right;
+        }
+        repeat_chr_matches_right.push_back(current_match_right);
+
+        int current_match_left = 0;
+        for (int i = 0; i < cycle_str.size(); ++i) {
+            const char current = cycle_str.at(cycle_str.size() - i - 1);
+            const char consensus = consensus_cycle_str.at(consensus_cycle_str.size() - i - 1);
+
+            if (current != consensus) {
+                break;
+            }
+            ++current_match_left;
+        }
+        repeat_chr_matches_left.push_back(current_match_left);
+    }
+
+    /* Take maximum repeat match that is in 20% of all matches */
+    std::sort(repeat_chr_matches_left.begin(), repeat_chr_matches_left.end());
+    std::sort(repeat_chr_matches_right.begin(), repeat_chr_matches_right.end());
+
+    int quart_idx = static_cast<int>(
+        std::round(0.2 * static_cast<float>(repeat_chr_matches_left.size())));
+    if (quart_idx >= repeat_chr_matches_left.size()) {
+        quart_idx = repeat_chr_matches_left.size() - 1;
+    }
+
+    const int repeat_chr_match_left = repeat_chr_matches_left[quart_idx];
+    const int repeat_chr_match_right = repeat_chr_matches_right[quart_idx];
+
+    /* 5. Find consensus repeat sequence */
+    string repeat = "";
+    int repeat_length = repeat_chr_match_left + repeat_chr_match_right;
+    for (int i = 0; i < repeat_length; ++i) {
+        int offset = consensus_cycle_str.size() - repeat_chr_match_left + i;
+        const char& chr = consensus_cycle_str.at(offset % consensus_cycle_str.size());
+
+        repeat.push_back(chr);
+    }
+
+    /* 6. Reconstruct full sequence and spacer strings */
+    vector<string> spacers;
+    string full_sequence = "";
+    for (int i = 0; i < cycles_str.size(); ++i) {
         string spacer = "";
+        const auto& cycle_str = cycles_str.at(i);
+        
+        int offset;
+        if (std::find(aligned_cycles_indices.begin(), aligned_cycles_indices.end(), i) != aligned_cycles_indices.end()) {
+            // Already aligned, thereby using repeat_chr_match_left
+            offset = cycle_str.size() - repeat_chr_match_left;
+        } else {
+            // Not aligned, thereby need to find offset
+            offset = 0;
+            int best_string_distance = std::numeric_limits<int>::max();
 
-        bool passed_repeat = false;
-        bool going_through_spacer_region = false;
-        int loop_counter = 0;
+            for (int j = 0; j < cycle_str.size(); ++j) {
+                string rotated_cycle_str = cycle_str.substr(j) + cycle_str.substr(0, j);
 
-        // The spacers might wrap around, therefore go through cycle twice:
-        // Starting with S -> SSSSSRRRRRSSSSS SSSSSRRRRRSSSSS
-        // Starting with R -> RRRRRSSSSSRRRRR RRRRRSSSSSRRRRR
-        while (loop_counter < 2) {
-            for (const auto& node : cycle) {
-                bool is_repeat_node = std::find(repeat_nodes.begin(), repeat_nodes.end(), node) != repeat_nodes.end();
-                if (is_repeat_node) {
-                    passed_repeat = true;
-                    if (going_through_spacer_region) {
-                        break;
-                    }
-                } else if (passed_repeat) {
-                    going_through_spacer_region = true;
-                    if (spacer == "") {
-                        spacer = fetch_node_label(sdbg, node);
-                    } else {
-                        char new_char = fetch_node_label(sdbg, node).back();
-                        string new_char_str(1, new_char);
-                        spacer += new_char_str;
-                    }
+                string supposed_repeat = rotated_cycle_str.substr(0, repeat_length);
+                uint16_t distance = get_levenshtein_distance(supposed_repeat, repeat);
+                if (distance < best_string_distance) {
+                    best_string_distance = distance;
+                    offset = j;
                 }
             }
-
-            loop_counter++;
         }
 
-        if (spacer.size() > 45) {
-            spacer = spacer.substr(23, spacer.size() - 45);
-        } else {
-            spacer.clear();
+        for (int j = 0; j < cycle_str.size(); ++j) {
+            const auto& chr = cycle_str.at((offset + j) % cycle_str.size());
+
+            if (j >= repeat_length) {
+                spacer += chr;
+            }
+            full_sequence += chr;
         }
+
         spacers.push_back(spacer);
     }
-    
-    string crispr_sequence = repeat; // roughly R-S1-R-S2-...-R-SN-R
-    for (auto spacer_it = spacers.rbegin(); spacer_it != spacers.rend(); ++spacer_it) {
-        crispr_sequence += *spacer_it;
-        crispr_sequence += repeat;
+
+    /* crispr sequence end with a repat (usually mutated), tmp taking consensus repeat */
+    full_sequence += repeat;
+
+    return std::make_tuple(repeat, spacers, full_sequence);
+}
+
+uint16_t get_levenshtein_distance(const string& s1, const string& s2) {
+    vector<vector<uint16_t>> dist;
+
+    /* Setup matrix dist */
+    vector<uint16_t> first_row;
+    for (int i = 0; i < s1.size() + 1; ++i) {
+        first_row.push_back(i);
+    }
+    dist.push_back(first_row);
+
+    for (int i = 1; i < s2.size() + 1; ++i) {
+        vector<uint16_t> row;
+        row.push_back(i);
+        dist.push_back(row);
     }
 
-    return std::make_tuple(repeat, spacers, crispr_sequence);
+    /* Fill matrix with computation */
+    for (int x = 1; x < s1.size() + 1; ++x) {
+        for (int y = 1; y < s2.size() + 1; ++y) {
+            char s1_char = s1.at(x - 1);
+            char s2_char = s2.at(y - 1);
+
+            uint16_t min;
+            if (s1_char == s2_char) { // No extra distance
+                min = dist.at(y - 1).at(x - 1);
+            } else { // update(s1_char, s2_char)
+                min = dist.at(y - 1).at(x - 1) + 1;
+            }
+
+            if (min > dist.at(y).at(x - 1) + 1) { // insert(s1_char)
+                min = dist.at(y).at(x - 1) + 1;
+            }
+
+            if (min > dist.at(y - 1).at(x) + 1) { // delete()
+                min = dist.at(y - 1).at(x) + 1;
+            }
+
+            dist.at(y).push_back(min);
+        }
+    }
+
+    /* Return result of matrix */
+    return dist.at(s2.size()).at(s1.size());
 }

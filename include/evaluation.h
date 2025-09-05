@@ -6,22 +6,9 @@
 #include <string>
 #include <stdint.h>
 
-using namespace std;
+#include "tmp_utils.h"
 
-/**
- * @internal
- * @brief Get the levenshtein distance of both strings
- * 
- * Using the Levenshtein distance (matrix implementation in O(|s1| |s2|)) with:
- *  - insert(c)   costs 1
- *  - update(a,b) costs 1
- *  - delete(c)   costs 1
- * 
- * @param s1 First string
- * @param s2 Second string
- * @return Distance according to the algorithm (uint16_t)
- */
-uint16_t get_levenshtein_distance(const string& s1, const string& s2);
+using namespace std;
 
 // /**
 //  * @internal
