@@ -4,7 +4,19 @@
  * @file cycle_finder.cpp
  * @brief Implementation of functions for cycle detection and analysis in a sequence graph.
  *
- * This file contains the implementation of the CycleFinder class                        vector<uint64    vector<uint64_t> outgoings;
+ * This file contains the implementation of the CycleFinder class                        vector<uivector<vector<uint64_t>> CycleFinder::FindCycleUtil(uint64_t start_node) {
+    vector<uint64_t> path;
+    map<uint64_t, int> lock;
+    vector<vector<uint64_t>> stack;
+    vector<int> backtrack_lengths;
+    path.push_back(start_node);
+    lock[start_node] = 0;
+    vector<uint64_t> outgoings;
+    this->_GetOutgoings(start_node, outgoings, GetCachedMultiplicity(start_node));
+    stack.push_back(outgoings);
+    backtrack_lengths.push_back(maximal_length);
+    return FindCycle(start_node, path, lock, stack, backtrack_lengths);
+}<uint64_t> outgoings;
     bool stop = false;
     this->_GetOutgoings(start_node, outgoings, GetCachedMultiplicity(start_node));
     stack.push_back(outgoings);incomings;
@@ -205,7 +217,7 @@ vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint
                     }
                 }
             } 
-            else if (path.size() < lock.try_emplace(neighbor, this->maximal_length).first->second) {
+            else if (path.size() < static_cast<size_t>(lock.try_emplace(neighbor, this->maximal_length).first->second)) {
                 //neighbors.erase(neighbor);
                 path.push_back(neighbor);
                 backtrack_lengths.push_back(this->maximal_length);
@@ -240,7 +252,7 @@ vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint
                     relax_stack.pop_back();
                     if (lock.try_emplace(u, this->maximal_length).first->second < this->maximal_length - bl + 1) {
                         lock[u] = this->maximal_length - bl + 1;
-                        unordered_set<uint64_t> incomings;
+                        vector<uint64_t> incomings;
                         this->_GetIncomings(u, incomings, GetCachedMultiplicity(start_node));
                         for (auto w : incomings)
                             if (path_set.find(w) == path_set.end())
@@ -380,7 +392,6 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
         #pragma omp for schedule(guided, chunk_size)
         for (uint64_t node = 0; node < this->sdbg.size(); node++) {
                 size_t edge_indegree = this->sdbg.EdgeIndegree(node);
-                size_t edge_outdegree = this->sdbg.EdgeOutdegree(node);
                 loaded+=1; 
                 if(loaded % 10000000 == 0) std::cout << "Loaded " << loaded << " nodes\n";
                 if (edge_indegree >= 2 && this->sdbg.EdgeMultiplicity(node) > 20)
@@ -433,7 +444,6 @@ int CycleFinder::FindApproximateCRISPRArrays()
     */
     
     struct mallinfo mem_info = mallinfo();
-    size_t graph_mem_info = mem_info.uordblks;
     int cumulative = 0;
     printf("Number of nodes in a graph: %lu\n", this->sdbg.size());
     string mode = "fastq";
@@ -448,7 +458,7 @@ int CycleFinder::FindApproximateCRISPRArrays()
     size_t n_th_counter = 0;
     for (auto nodes_iterator = start_nodes_chunked.begin(); nodes_iterator != start_nodes_chunked.end(); nodes_iterator++) {
         auto thread_count = this->threads_count;
-        if (nodes_iterator->second.size() < thread_count)
+        if (nodes_iterator->second.size() < static_cast<size_t>(thread_count))
             thread_count = nodes_iterator->second.size();
         #pragma omp parallel for num_threads(thread_count) schedule(guided) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
         for (uint64_t start_node_index = 0; start_node_index < nodes_iterator->second.size(); start_node_index++) {
