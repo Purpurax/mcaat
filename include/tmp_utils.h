@@ -65,18 +65,38 @@ void print_sdbg_graph_to_dot_file_convert(const string& lib_file_path);
 /**
  * @brief Gets the repeat and the spacers in correct order as sequences
  * 
- * @pre The cycles in ordered_cycles are expected to contain at most one occurrence of any id
+ * 1. Find all repeat nodes by thresholding
+ * 2. Align the cycles to some repeat node (most commonly appearing repeat node)
+ * 3. Turn cycles into sequence
+ * 4. Barrel shift until the sequence is: RRRRRSSSSS
+ * 5. Find consensus repeat sequence
+ * 6. Reconstruct full sequence and spacer strings
  * 
- * @post Will modify number_of_spacers to have the number of spacers
+ * @post ordered_cycles will be modified internally
  * 
  * @param sdbg The graph used for getting the sequences and the repeats
  * @param ordered_cycles The cycles in the correct order containing node ids
  * 
- * @return Returns the repeat sequence and a vector of spacer sequences (pair<string, vector<string>>)
+ * @return Returns the repeat sequence, spacer sequences, and the full sequence (tuple<string, vector<string>>, string)
  */
 tuple<string, vector<string>, string> get_systems(
     SDBG& sdbg,
-    const vector<vector<uint64_t>>& ordered_cycles
+    vector<vector<uint64_t>>& ordered_cycles
 );
+
+/**
+ * @internal
+ * @brief Get the levenshtein distance of both strings
+ * 
+ * Using the Levenshtein distance (matrix implementation in O(|s1| |s2|)) with:
+ *  - insert(c)   costs 1
+ *  - update(a,b) costs 1
+ *  - delete(c)   costs 1
+ * 
+ * @param s1 First string
+ * @param s2 Second string
+ * @return Distance according to the algorithm (uint16_t)
+ */
+uint16_t get_levenshtein_distance(const string& s1, const string& s2);
 
 #endif

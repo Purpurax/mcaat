@@ -106,6 +106,7 @@ optional<Jump> create_jump_from_sequence(
  * @param fastq_file_1 Normal fastq read file
  * @param fastq_file_2 Optional second fastq file with reversed complement sequences
  * @param thread_count The amount of threads used to construct the jumps parallely
+ * @param biggest_jump_size
  * 
  * @return All valid Jumps that can be build using the read files
  */
@@ -113,7 +114,8 @@ vector<Jump> get_jumps_from_reads(
     const SDBG& sdbg,
     const string& fastq_file_1,
     const optional<string>& fastq_file_2,
-    const size_t thread_count
+    const size_t thread_count,
+    size_t& biggest_jump_size
 );
 
 #endif

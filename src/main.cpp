@@ -296,7 +296,14 @@ int main(int argc, char** argv) {
     start_time = std::chrono::high_resolution_clock::now();
 
     auto fastq_files = get_fastq_files_from_settings(settings);
-    auto jumps = get_jumps_from_reads(sdbg, fastq_files.first, fastq_files.second, settings.threads);
+    size_t biggest_jump_size = 0;
+    auto jumps = get_jumps_from_reads(
+        sdbg,
+        fastq_files.first,
+        fastq_files.second,
+        settings.threads,
+        biggest_jump_size
+    );
     cout << "    ▸ Created " << jumps.size() << " jumps" << endl;
 
     end_time = std::chrono::high_resolution_clock::now();
@@ -312,7 +319,7 @@ int main(int argc, char** argv) {
 
     
     cout << "  ▸ Splitting into subproblems" << endl;
-    auto subgraphs = get_crispr_regions_extended_by_k(sdbg, 150, cycles_map);
+    auto subgraphs = get_crispr_regions_extended_by_k(sdbg, biggest_jump_size, cycles_map);
 
     cout << "  🔄 Filtering subproblems:" << endl;
     vector<Graph> remaining_subgraphs;
@@ -380,11 +387,7 @@ int main(int argc, char** argv) {
         
         cout << "        ▸ Number of spacers: " << spacers.size() << endl;
 
-        if (full_sequence.size() >= 23) {
-            found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers));
-        } else {
-            cout << "        ▸ The sequence is discarded as it is shorter than 23" << endl;
-        }
+        found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers));
     }
     cout << "  ✅ Completed each subproblem" << endl;
 
@@ -422,7 +425,7 @@ int main(int argc, char** argv) {
 
         size_t no_match_count = 0;
         float average_similarity = 0.0;
-        for (const auto& [sequence, _repeat, spacers] : found_systems) {
+        for (const auto& [sequence, repeat, spacers] : found_systems) {
             const auto similarity = compare_sequence_to_ground_of_truth(
                 sequence,
                 benchmark_sequences
@@ -435,7 +438,8 @@ int main(int argc, char** argv) {
             } else {
                 cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
                 cout << (similarity * 100) << "% similarity with ";
-                cout << spacers.size() << " spacers and sequence: ";
+                cout << spacers.size() << " spacers, repeat: ";
+                cout << repeat << ", and sequence: ";
                 cout << sequence << endl;
                 average_similarity += similarity;
             }

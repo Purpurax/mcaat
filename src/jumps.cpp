@@ -93,7 +93,8 @@ vector<Jump> get_jumps_from_reads(
     const SDBG& sdbg,
     const string& fastq_file_1,
     const optional<string>& fastq_file_2,
-    const size_t thread_count
+    const size_t thread_count,
+    size_t& biggest_jump_size
 ) {
     vector<Jump> jumps;
     const uint32_t K = sdbg.k();
@@ -107,6 +108,9 @@ vector<Jump> get_jumps_from_reads(
             const string reversed_seq = reverse_pair_ends_sequence(sequence);
             sequences.push_back(reversed_seq);
         }
+    }
+    if (sequences.size() > 0 && sequences.at(0).size() > K) {
+        biggest_jump_size = sequences.at(0).size() - K;
     }
 
     #pragma omp parallel num_threads(thread_count)
