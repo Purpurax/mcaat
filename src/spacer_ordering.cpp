@@ -731,7 +731,7 @@ void apply_topological_sort(
     
     // Choose start_node by the heuristic
     int best_start_node = 0;
-    float best_heuristic_value = static_cast<float>(node_affection_to_start.at(possible_start_nodes[best_start_node]));
+    float best_heuristic_value = std::numeric_limits<float>::lowest();
     
     for (int i = 0; i < possible_start_nodes.size(); ++i) {
         const uint32_t node = possible_start_nodes[i];
