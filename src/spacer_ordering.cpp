@@ -746,16 +746,6 @@ void apply_topological_sort(
         }
     }
 
-    int second_best_heuristic_value = node_affection_to_start.at(possible_start_nodes[
-        (best_start_node + 1) % possible_start_nodes.size()
-    ]);
-    for (int i = 0; i < possible_start_nodes.size(); ++i) {
-        int current_affection = node_affection_to_start.at(possible_start_nodes[i]);
-        if (i != best_start_node && current_affection >= second_best_heuristic_value) {
-            second_best_heuristic_value = current_affection;
-        }
-    }
-
     uint32_t start_node = possible_start_nodes[best_start_node];
     total_order.push_back(start_node);
 
