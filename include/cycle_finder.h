@@ -28,6 +28,8 @@ class CycleFinder {
         vector<bool> visited;
         vector<bool> look_up_table;
         int threads_count;
+        std::unordered_map<uint64_t, size_t> mult_cache;
+        const size_t MAX_CACHE_SIZE = 1000000;
 
         //#### DEVELOPER FUNCTIONS ####
         void _WriteStartNodesToFile(const map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked, const std::string& filename);
@@ -38,14 +40,15 @@ class CycleFinder {
         //#### HELPER FUNCTIONS FOR CYCLE ENUMERATION ####
         bool _IncomingNotEqualToCurrentNode(uint64_t node, size_t edge_indegree);
         bool _BackgroundCheck(uint64_t original_node, size_t repeat_multiplicity, uint64_t current_node);
-        void _GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoings_set, size_t repeat_multiplicity);
-        void _GetIncomings(uint64_t node, unordered_set<uint64_t>& incomings_set, size_t repeat_multiplicity);
+        void _GetOutgoings(uint64_t node, std::vector<uint64_t>& outgoings_vec, size_t repeat_multiplicity);
+        void _GetIncomings(uint64_t node, std::vector<uint64_t>& incomings_vec, size_t repeat_multiplicity);
+        size_t GetCachedMultiplicity(uint64_t node);
         //#### HELPER FUNCTIONS FOR CYCLE ENUMERATION ####
 
 
         //#### HELPER FUNCTIONS FOR DLS ###
-        void _GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoings_set);
-        void _GetIncomings(uint64_t node, unordered_set<uint64_t>& incomings_set);
+        void _GetOutgoings(uint64_t node, std::vector<uint64_t>& outgoings_vec);
+        void _GetIncomings(uint64_t node, std::vector<uint64_t>& incomings_vec);
         //#### HELPER FUNCTIONS FOR DLS ####
 
     public:
@@ -64,7 +67,7 @@ class CycleFinder {
         //#### DLS ####
 
         //#### CYCLE ENUMERATION ####
-        vector<vector<uint64_t>> FindCycle(uint64_t start_node, vector<uint64_t> path, map<uint64_t, int> lock, vector<unordered_set<uint64_t>> stack, vector<int> backtrack_lengths);
+        vector<vector<uint64_t>> FindCycle(uint64_t start_node, vector<uint64_t> path, map<uint64_t, int> lock, vector<vector<uint64_t>> stack, vector<int> backtrack_lengths);
         vector<vector<uint64_t>> FindCycleUtil(uint64_t startnode);
         //#### CYCLE ENUMERATION ####
   

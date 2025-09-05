@@ -4,7 +4,12 @@
  * @file cycle_finder.cpp
  * @brief Implementation of functions for cycle detection and analysis in a sequence graph.
  *
- * This file contains the implementation of the CycleFinder class, which includes methods for:
+ * This file contains the implementation of the CycleFinder class                        vector<uint64    vector<uint64_t> outgoings;
+    bool stop = false;
+    this->_GetOutgoings(start_node, outgoings, GetCachedMultiplicity(start_node));
+    stack.push_back(outgoings);incomings;
+                        this->_GetIncomings(u, incomings, GetCachedMultiplicity(start_node));
+                        for (auto w : incomings)hich includes methods for:
  * - Checking if any incoming edge of a node is not equal to the node itself.
  * - Performing a background check on a neighbor node to determine if it meets certain criteria.
  * - Getting the outgoing edges of a node that pass the background check.
@@ -36,7 +41,7 @@ bool CycleFinder::_IncomingNotEqualToCurrentNode(uint64_t node, size_t edge_inde
  * @brief Performs a background check on a neighbor node to determine if it meets certain criteria.
  */
 bool CycleFinder::_BackgroundCheck(uint64_t original_node, size_t repeat_multiplicity, uint64_t neighbor_node) {
-    auto neighbor_node_multiplicity = sdbg.EdgeMultiplicity(neighbor_node);
+    auto neighbor_node_multiplicity = GetCachedMultiplicity(neighbor_node);
     if(this->visited[neighbor_node]) {
         return false;
     }
@@ -49,11 +54,22 @@ bool CycleFinder::_BackgroundCheck(uint64_t original_node, size_t repeat_multipl
     return true;
 }
 
+/**
+ * @brief Gets cached multiplicity for a node, with lazy loading.
+ */
+size_t CycleFinder::GetCachedMultiplicity(uint64_t node) {
+    auto it = mult_cache.find(node);
+    if (it != mult_cache.end()) return it->second;
+    size_t mult = sdbg.EdgeMultiplicity(node);
+    if (mult_cache.size() < MAX_CACHE_SIZE) mult_cache[node] = mult;
+    return mult;
+}
+
 
 /**
  * @brief Gets the outgoing edges of a node that pass the background check.
  */
-void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoings_set, size_t repeat_multiplicity) {
+void CycleFinder::_GetOutgoings(uint64_t node, std::vector<uint64_t>& outgoings_vec, size_t repeat_multiplicity) {
    
     int edge_outdegree = sdbg.EdgeOutdegree(node);
     if (edge_outdegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -62,7 +78,7 @@ void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoing
     // Try unique edge first for speed
     uint64_t unique_next = sdbg.UniqueNextEdge(node);
     if (unique_next != SDBG::kNullID && this->_BackgroundCheck(node, repeat_multiplicity, unique_next)) {
-        outgoings_set.insert(unique_next);
+        outgoings_vec.push_back(unique_next);
         return; // No need to check further if unique
     }
     // Fallback to full enumeration
@@ -71,13 +87,13 @@ void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoing
     if (flag != -1) {
         for (const auto& outgoing : outgoings)
             if (this->_BackgroundCheck(node, repeat_multiplicity, outgoing))
-                outgoings_set.insert(outgoing);
+                outgoings_vec.push_back(outgoing);
     }
 }
 /**
  * @brief Retrieves the incoming edges of a node that pass the background check.
  */
-void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incomings_set, size_t repeat_multiplicity) {
+void CycleFinder::_GetIncomings(uint64_t node, std::vector<uint64_t>& incomings_vec, size_t repeat_multiplicity) {
   
     int edge_indegree = sdbg.EdgeIndegree(node);
     if (edge_indegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -86,7 +102,7 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     // Try unique edge first for speed
     uint64_t unique_prev = sdbg.UniquePrevEdge(node);
     if (unique_prev != SDBG::kNullID && this->_BackgroundCheck(node, repeat_multiplicity, unique_prev)) {
-        incomings_set.insert(unique_prev);
+        incomings_vec.push_back(unique_prev);
         return; // No need to check further if unique
     }
     // Fallback to full enumeration
@@ -95,14 +111,14 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     if (flag != -1) {
         for (const auto& incoming : incomings)
             if (this->_BackgroundCheck(node, repeat_multiplicity, incoming))
-                incomings_set.insert(incoming);
+                incomings_vec.push_back(incoming);
     }
 }
 // ## START: HELPER FUNCTIONS FOR DLS ##
 /**
  * @brief Gets the outgoing edges of a node that pass the background check.
  */
-void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoings_set) {
+void CycleFinder::_GetOutgoings(uint64_t node, std::vector<uint64_t>& outgoings_vec) {
    
     int edge_outdegree = sdbg.EdgeOutdegree(node);
     if (edge_outdegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -111,7 +127,7 @@ void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoing
     // Try unique edge first
     uint64_t unique_next = sdbg.UniqueNextEdge(node);
     if (unique_next != SDBG::kNullID) {
-        outgoings_set.insert(unique_next);
+        outgoings_vec.push_back(unique_next);
         return;
     }
     // Fallback
@@ -119,13 +135,13 @@ void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoing
     int flag = sdbg.OutgoingEdges(node, outgoings.data());
     if (flag != -1) {
         for (const auto& outgoing : outgoings)
-            outgoings_set.insert(outgoing);
+            outgoings_vec.push_back(outgoing);
     }
 }
 /**
  * @brief Retrieves the incoming edges of a node that pass the background check.
  */
-void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incomings_set) {
+void CycleFinder::_GetIncomings(uint64_t node, std::vector<uint64_t>& incomings_vec) {
   
     int edge_indegree = sdbg.EdgeIndegree(node);
     if (edge_indegree == 0 || !this->sdbg.IsValidEdge(node)) {
@@ -134,7 +150,7 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     // Try unique edge first
     uint64_t unique_prev = sdbg.UniquePrevEdge(node);
     if (unique_prev != SDBG::kNullID) {
-        incomings_set.insert(unique_prev);
+        incomings_vec.push_back(unique_prev);
         return;
     }
     // Fallback
@@ -142,7 +158,7 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     int flag = sdbg.IncomingEdges(node, incomings.data());
     if (flag != -1) {
         for (const auto& incoming : incomings)
-            incomings_set.insert(incoming);
+            incomings_vec.push_back(incoming);
     }
 }
 
@@ -161,7 +177,7 @@ CycleFinder::CycleFinder(SDBG& sdbg, int length_bound, int minimal_length, strin
     this->FindApproximateCRISPRArrays();
 }
 
-vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint64_t> path, map<uint64_t, int> lock, vector<unordered_set<uint64_t>> stack, 
+vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint64_t> path, map<uint64_t, int> lock, vector<vector<uint64_t>> stack, 
                                         vector<int> backtrack_lengths) {
     int counter = 0;
     uint64_t current_node = start_node;
@@ -174,7 +190,7 @@ vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint
             break;
         }
         
-        unordered_set<uint64_t> neighbors = stack.back();
+        vector<uint64_t> neighbors = stack.back();
         bool flag = true;
         for (auto neighbor : neighbors) {
             current_node = neighbor;
@@ -190,13 +206,13 @@ vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint
                 }
             } 
             else if (path.size() < lock.try_emplace(neighbor, this->maximal_length).first->second) {
-                neighbors.erase(neighbor);
+                //neighbors.erase(neighbor);
                 path.push_back(neighbor);
                 backtrack_lengths.push_back(this->maximal_length);
                 lock[neighbor] = path.size();
-                stack.back().erase(neighbor);
-                unordered_set<uint64_t> outgoings;
-                this->_GetOutgoings(neighbor, outgoings, sdbg.EdgeMultiplicity(start_node));
+                //stack.back().erase(neighbor);
+                vector<uint64_t> outgoings;
+                this->_GetOutgoings(neighbor, outgoings, GetCachedMultiplicity(start_node));
                 stack.push_back(outgoings);
                 flag = false;
                 break;
@@ -225,7 +241,7 @@ vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint
                     if (lock.try_emplace(u, this->maximal_length).first->second < this->maximal_length - bl + 1) {
                         lock[u] = this->maximal_length - bl + 1;
                         unordered_set<uint64_t> incomings;
-                        this->_GetIncomings(u, incomings, sdbg.EdgeMultiplicity(start_node));
+                        this->_GetIncomings(u, incomings, GetCachedMultiplicity(start_node));
                         for (auto w : incomings)
                             if (path_set.find(w) == path_set.end())
                                 relax_stack.push_back(make_pair(bl + 1, w));
@@ -261,7 +277,7 @@ vector<vector<uint64_t>> CycleFinder::FindCycleUtil(uint64_t start_node) {
     lock[start_node] = 0;
     unordered_set<uint64_t> outgoings;
     bool stop = false;
-    this->_GetOutgoings(start_node, outgoings, sdbg.EdgeMultiplicity(start_node));
+    this->_GetOutgoings(start_node, outgoings, GetCachedMultiplicity(start_node));
     stack.push_back(outgoings);
     backtrack_lengths.push_back(maximal_length);
     return FindCycle(start_node, path, lock, stack, backtrack_lengths);
@@ -304,7 +320,7 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
         reached_depth = depth;
 
         if (depth < limit) {
-            std::unordered_set<uint64_t> adj;
+            std::vector<uint64_t> adj;
             adj.reserve(kAlphabetSize + 1);
             this->_GetOutgoings(v, adj);
             for (uint64_t neighbor : adj) {
@@ -334,7 +350,7 @@ vector<uint64_t> CycleFinder::CollectTips() {
 void CycleFinder::RecursiveReduction(uint64_t tip) {
     if (!sdbg.EdgeOutdegreeZero(tip)) 
         return;
-    unordered_set<uint64_t> parents;
+    vector<uint64_t> parents;
     this->_GetIncomings(tip, parents);
     this->sdbg.SetInvalidEdge(tip);
     for (uint64_t parent : parents) 
@@ -361,7 +377,7 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
     //this->InvalidateMultiplicityOneNodes();
     #pragma omp parallel num_threads(this->threads_count)
     {
-        #pragma omp for schedule(dynamic, chunk_size)
+        #pragma omp for schedule(guided, chunk_size)
         for (uint64_t node = 0; node < this->sdbg.size(); node++) {
                 size_t edge_indegree = this->sdbg.EdgeIndegree(node);
                 size_t edge_outdegree = this->sdbg.EdgeOutdegree(node);
@@ -434,7 +450,7 @@ int CycleFinder::FindApproximateCRISPRArrays()
         auto thread_count = this->threads_count;
         if (nodes_iterator->second.size() < thread_count)
             thread_count = nodes_iterator->second.size();
-        #pragma omp parallel for num_threads(thread_count) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
+        #pragma omp parallel for num_threads(thread_count) schedule(guided) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
         for (uint64_t start_node_index = 0; start_node_index < nodes_iterator->second.size(); start_node_index++) {
             uint64_t start_node = nodes_iterator->second[start_node_index];
             if (this->visited[start_node]) continue;
