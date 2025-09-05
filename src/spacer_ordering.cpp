@@ -376,7 +376,7 @@ vector<vector<uint64_t>> find_all_possible_paths(
     for (uint64_t next_node : neighbors) {
         auto sub_paths = find_all_possible_paths(graph, next_node, end, nodes_left - 1);
         for (auto& sub_path : sub_paths) {
-            sub_path.push_back(start);
+            sub_path.insert(sub_path.begin(), start);
             paths.push_back(sub_path);
         }
     }
