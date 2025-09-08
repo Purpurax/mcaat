@@ -135,4 +135,4 @@ The tool creates the following directory structure inside the specified output f
 
 ## Support
 
-If you encounter issues or have questions, feel free to open an issue.
+If you encounter issues or have questions, feel free to open an issue or write us an email: fikrat.talibli@ibmg.uni-stuttgart.de. If you are using this software please cite this paper: https://academic.oup.com/microlife/article/doi/10.1093/femsml/uqaf016/8205558.

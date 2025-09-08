@@ -28,8 +28,6 @@ class CycleFinder {
         vector<bool> visited;
         vector<bool> look_up_table;
         int threads_count;
-        std::unordered_map<uint64_t, size_t> mult_cache;
-        const size_t MAX_CACHE_SIZE = 1000000;
 
         //#### DEVELOPER FUNCTIONS ####
         void _WriteStartNodesToFile(const map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked, const std::string& filename);
@@ -42,7 +40,6 @@ class CycleFinder {
         bool _BackgroundCheck(uint64_t original_node, size_t repeat_multiplicity, uint64_t current_node);
         void _GetOutgoings(uint64_t node, std::vector<uint64_t>& outgoings_vec, size_t repeat_multiplicity);
         void _GetIncomings(uint64_t node, std::vector<uint64_t>& incomings_vec, size_t repeat_multiplicity);
-        size_t GetCachedMultiplicity(uint64_t node);
         //#### HELPER FUNCTIONS FOR CYCLE ENUMERATION ####
 
 
