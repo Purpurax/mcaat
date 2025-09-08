@@ -396,7 +396,7 @@ int main(int argc, char** argv) {
 #endif
 
 
-#ifdef DEBUG
+#ifdef DEVELOP
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
     Settings settings = parse_arguments(argc, argv);
