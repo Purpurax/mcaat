@@ -38,8 +38,8 @@ class CycleFinder {
         //#### HELPER FUNCTIONS FOR CYCLE ENUMERATION ####
         bool _IncomingNotEqualToCurrentNode(uint64_t node, size_t edge_indegree);
         bool _BackgroundCheck(uint64_t original_node, size_t repeat_multiplicity, uint64_t current_node);
-        void _GetOutgoings(uint64_t node, std::vector<uint64_t>& outgoings_vec, size_t repeat_multiplicity);
-        void _GetIncomings(uint64_t node, std::vector<uint64_t>& incomings_vec, size_t repeat_multiplicity);
+        void _GetOutgoings(uint64_t node, std::unordered_set<uint64_t>& outgoings_set, size_t repeat_multiplicity);
+        void _GetIncomings(uint64_t node, std::unordered_set<uint64_t>& incomings_set, size_t repeat_multiplicity);
         //#### HELPER FUNCTIONS FOR CYCLE ENUMERATION ####
 
 
