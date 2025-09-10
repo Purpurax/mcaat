@@ -24,6 +24,15 @@ if(NOT ZLIB_FOUND)
     set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
 endif()
 
+# Add parallel hashmap for better performance
+include(FetchContent)
+FetchContent_Declare(
+    phmap
+    GIT_REPOSITORY https://github.com/greg7mdp/parallel-hashmap.git
+    GIT_TAG v1.3.11
+)
+FetchContent_MakeAvailable(phmap)
+
 find_package(OpenMP REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -39,6 +48,7 @@ include_directories(include)
 include_directories(libs/megahit/src)
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
+include_directories(${phmap_SOURCE_DIR})
 
 # Source files
 file(GLOB_RECURSE MAIN_SOURCE "src/*.cpp")
@@ -54,7 +64,6 @@ file(GLOB_RECURSE PROGRESSBAR_SOURCE "libs/progressbar/include/*.hpp")
 
 # Additional source files
 list(APPEND OTHER_SOURCE
-    libs/megahit/src/main.cpp
     libs/megahit/src/main_assemble.cpp
     libs/megahit/src/main_buildlib.cpp
     libs/megahit/src/main_iterate.cpp
@@ -85,7 +94,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -ggdb -O1 -D_LIBCPP_DEBUG -D_GLIBCXX_DEBUG")
 
 # Add executable
 add_executable(mcaat ${MAIN_SOURCE} ${ASMBL_SOURCE} ${IDBA_SOURCE} ${SDBG_SOURCE} ${LCASM_SOURCE}
-    ${SEQ_SOURCE} ${CX1_SOURCE} ${TOOLKIT_SOURCE} ${SOME_OTHERS})
+    ${SEQ_SOURCE} ${CX1_SOURCE} ${TOOLKIT_SOURCE} ${OTHER_SOURCE} ${SOME_OTHERS})
 
 # Static build linker flags
 if (STATIC_BUILD)
@@ -115,6 +124,4 @@ if(DEVELOP)
     FetchContent_MakeAvailable(json)
     target_link_libraries(mcaat PRIVATE nlohmann_json::nlohmann_json)
     target_compile_definitions(mcaat PRIVATE DEVELOP)
-else()
-    target_compile_definitions(mcaat PRIVATE RELEASE)
 endif()
