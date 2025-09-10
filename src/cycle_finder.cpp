@@ -295,31 +295,18 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
             continue;
         }
 
-        // Megahit optimization: Try simple path first for faster traversal
-        uint64_t simple_next = sdbg.NextSimplePathEdge(v);
-        if (simple_next != SDBG::kNullID && simple_next != v) {  // Avoid self-loops
-            // Follow simple path directly - much faster than exploring all neighbors
-            bool should_visit_simple = (dls_visited.find(simple_next) == dls_visited.end()) ||
-                                     (simple_next == start && depth > 0);
+        // Process all neighbors to maintain correctness (removed faulty simple path optimization)
+        // Process neighbors in forward order (SIMD-friendly pattern from megahit)
+        for (int i = 0; i < outdegree; ++i) {
+            uint64_t neighbor = neighbors[i];
             
-            if (should_visit_simple) {
-                dls_visited.insert(simple_next);
-                dls_stack.push_back({simple_next, depth + 1});
-            }
-        } else {
-            // Fallback to full neighbor exploration when not on simple path
-            // Process neighbors in forward order (SIMD-friendly pattern from megahit)
-            for (int i = 0; i < outdegree; ++i) {
-                uint64_t neighbor = neighbors[i];
-                
-                // Megahit-style: Combine conditions to reduce branching
-                bool should_visit = (dls_visited.find(neighbor) == dls_visited.end()) ||
-                                   (neighbor == start && depth > 0);
-                
-                if (should_visit) {
-                    dls_visited.insert(neighbor);
-                    dls_stack.push_back({neighbor, depth + 1});
-                }
+            // Megahit-style: Combine conditions to reduce branching
+            bool should_visit = (dls_visited.find(neighbor) == dls_visited.end()) ||
+                               (neighbor == start && depth > 0);
+            
+            if (should_visit) {
+                dls_visited.insert(neighbor);
+                dls_stack.push_back({neighbor, depth + 1});
             }
         }
 
@@ -371,7 +358,7 @@ void CycleFinder::InvalidateMultiplicityOneNodes() {
  */
 size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked) {
     uint64_t loaded = 0;
-    const int chunk_size = 20000;
+    const int chunk_size = 5000;
     //this->InvalidateMultiplicityOneNodes();
     #pragma omp parallel num_threads(this->threads_count)
     {
