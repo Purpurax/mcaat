@@ -425,8 +425,9 @@ int main(int argc, char** argv) {
    
     int length_bound = 77;
     SDBG sdbg;
-    string graph_folder_old = settings.graph_folder;
-    settings.graph_folder="/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46/graph/graph";
+    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
+    string graph_folder_old = settings.graph_folder;///vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46
+    settings.graph_folder=folders[1];
     char * cstr = new char [settings.graph_folder.length()+1];
     std::strcpy (cstr, settings.graph_folder.c_str());
     cout << "Graph folder: " << cstr << endl;
@@ -439,7 +440,7 @@ int main(int argc, char** argv) {
 
     
     // %% FBCE ALGORITHM %%
-    cout << "FBCE START:" << endl;
+    cout << "FBCE FROM DEBUG START:" << endl;
     auto start_time = chrono::high_resolution_clock::now();
     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
     int number_of_spacers_total = 0;
