@@ -210,4 +210,4 @@ This deep dive explains the "why" and "how" behind each technique, turning them 
 - **Correctness First**: All changes here preserve exact semantics; no approximations.
 - **Scalability**: These techniques shine on large datasets where overhead dominates.
 
-This guide focuses on the "algorithmic juices"—the core techniques that make DLS efficient beyond just library calls.
+This guide focuses on the "algorithmic deep-dive"—the core techniques that make DLS efficient beyond just library calls.

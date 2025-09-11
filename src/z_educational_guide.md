@@ -231,7 +231,3 @@ for (int i = 0; i < outdegree; ++i) {
 - **Use `__builtin_prefetch`** to preload data into the cache, minimizing memory access delays.
 - **Use `thread_local`** for thread-specific data, ensuring safety and performance in multithreaded code without locks.
 - **Use `phmap::flat_hash_set`** for fast, cache-efficient lookups, outperforming `std::unordered_set` and `std::set` in graph algorithms.
-- **Profile and test**: Validate assumptions with profiling tools (e.g., `perf`, VTune) to ensure these optimizations improve performance.
-- **Be cautious**: Incorrect hints, excessive prefetching, or inappropriate container choices can harm performance, so use them strategically.
-
-For more details, experiment with these features in your code and profile using `perf` or VTune to measure their impact on your specific graph data.
