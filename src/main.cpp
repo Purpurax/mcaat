@@ -324,79 +324,7 @@ string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
 //     // %% DELETE THE GRAPH FOLDER %%
 // }
 
-#ifdef RELEASE
-int main(int argc, char** argv) {
-    // %% PARSE ARGUMENTS %%
-    Settings settings = parse_arguments(argc, argv);
-    string name_of_genome = "test";
-    if (check_for_error(settings)){
-        //tell the user which folder we are deleting
-        cout<< "Folder " << settings.output_folder << " will be deleted due to errors." << endl;
-        
-        cout << "Do you want that folder to be removed? (y/n): ";
-        char answer;
-        cin >> answer;
-        if (answer != 'y' && answer != 'Y') {
-            cout << "Exiting the program." << endl;
-            return 1;
-        }
-        cout << "Removing folder: " << settings.output_folder << endl;
-        fs::remove_all(settings.output_folder); 
-        return 1;
-    }
-    // %% PARSE ARGUMENTS %%
-
-    // %% BUILD GRAPH %%
-    SDBGBuild sdbg_build(settings);
-    // %% BUILD GRAPH %%
-    
-   
-    int length_bound = 77;
-    SDBG sdbg;
-    string graph_folder_old = settings.graph_folder;
-    settings.graph_folder+="/graph";
-    char * cstr = new char [settings.graph_folder.length()+1];
-    std::strcpy (cstr, settings.graph_folder.c_str());
-    cout << "Graph folder: " << cstr << endl;
-    sdbg.LoadFromFile(cstr);
-    cout << "Loaded the graph" << endl;
-
-    // %% LOAD GRAPH %%
-    
-    delete[] cstr;
-
-    
-    // %% FBCE ALGORITHM %%
-    cout << "FBCE START:" << endl;
-    auto start_time = chrono::high_resolution_clock::now();
-    CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
-    int number_of_spacers_total = 0;
-    auto cycles = cycle_finder.results;
-    cout << "Number of nodes in results: " << cycles.size() << endl;
-    // %% FBCE ALGORITHM %%
-    
-    int number_of_spacers = 0;
-    // %% FILTERS %%
-    cout << "FILTERS START:" << endl;
-    Filters filters(sdbg, cycles);
-    auto  SYSTEMS = filters.ListArrays(number_of_spacers);
-    cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
-    // %% FILTERS %%
-    //%% POST PROCESSING %%
-    cout << "POST PROCESSING START:" << endl;
-    CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
-    analyzer.run_analysis();
-    cout << "Saved in: " << settings.output_file << endl;
-    //%% POST PROCESSING %%
-
-    // %% DELETE THE GRAPH FOLDER %%
-    fs::remove_all(graph_folder_old);
-    // %% DELETE THE GRAPH FOLDER %%            
-}
-#endif
-
-
-#ifdef DEVELOP
+#ifdef DEBUG
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
     Settings settings = parse_arguments(argc, argv);
@@ -464,6 +392,75 @@ int main(int argc, char** argv) {
 
     // %% DELETE THE GRAPH FOLDER %%
     //fs::remove_all(graph_folder_old);
+    // %% DELETE THE GRAPH FOLDER %%            
+}
+#else
+int main(int argc, char** argv) {
+    // %% PARSE ARGUMENTS %%
+    Settings settings = parse_arguments(argc, argv);
+    string name_of_genome = "test";
+    if (check_for_error(settings)){
+        //tell the user which folder we are deleting
+        cout<< "Folder " << settings.output_folder << " will be deleted due to errors." << endl;
+        
+        cout << "Do you want that folder to be removed? (y/n): ";
+        char answer;
+        cin >> answer;
+        if (answer != 'y' && answer != 'Y') {
+            cout << "Exiting the program." << endl;
+            return 1;
+        }
+        cout << "Removing folder: " << settings.output_folder << endl;
+        fs::remove_all(settings.output_folder); 
+        return 1;
+    }
+    // %% PARSE ARGUMENTS %%
+
+    // %% BUILD GRAPH %%
+    SDBGBuild sdbg_build(settings);
+    // %% BUILD GRAPH %%
+    
+   
+    int length_bound = 77;
+    SDBG sdbg;
+    string graph_folder_old = settings.graph_folder;
+    settings.graph_folder+="/graph";
+    char * cstr = new char [settings.graph_folder.length()+1];
+    std::strcpy (cstr, settings.graph_folder.c_str());
+    cout << "Graph folder: " << cstr << endl;
+    sdbg.LoadFromFile(cstr);
+    cout << "Loaded the graph" << endl;
+
+    // %% LOAD GRAPH %%
+    
+    delete[] cstr;
+
+    
+    // %% FBCE ALGORITHM %%
+    cout << "FBCE START:" << endl;
+    auto start_time = chrono::high_resolution_clock::now();
+    CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
+    int number_of_spacers_total = 0;
+    auto cycles = cycle_finder.results;
+    cout << "Number of nodes in results: " << cycles.size() << endl;
+    // %% FBCE ALGORITHM %%
+    
+    int number_of_spacers = 0;
+    // %% FILTERS %%
+    cout << "FILTERS START:" << endl;
+    Filters filters(sdbg, cycles);
+    auto  SYSTEMS = filters.ListArrays(number_of_spacers);
+    cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
+    // %% FILTERS %%
+    //%% POST PROCESSING %%
+    cout << "POST PROCESSING START:" << endl;
+    CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
+    analyzer.run_analysis();
+    cout << "Saved in: " << settings.output_file << endl;
+    //%% POST PROCESSING %%
+
+    // %% DELETE THE GRAPH FOLDER %%
+    fs::remove_all(graph_folder_old);
     // %% DELETE THE GRAPH FOLDER %%            
 }
 #endif

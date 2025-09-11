@@ -41,7 +41,13 @@ option(COVERAGE "Generate coverage report" ON)
 option(STATIC_BUILD "Build static execution" OFF)
 option(SANITIZER "Enable sanitizers" OFF)
 option(TSAN "Enable thread sanitizers" OFF)
-option(DEVELOP "Enable development features (JSON, debug, etc)" OFF)
+option(DEBUG "Enable development features (JSON, debug, etc)" OFF)
+
+# Only define DEBUG if ENABLE_DEBUG is ON - for release, no macro (uses #else in main.cpp)
+option(ENABLE_DEBUG "Enable DEBUG macro for main function" OFF)
+if(ENABLE_DEBUG)
+    add_definitions(-DDEBUG)
+endif()
 
 # Include directories
 include_directories(include)
@@ -114,7 +120,7 @@ if(CMAKE_THREAD_LIBS_INIT)
 endif()
 
 # Development features
-if(DEVELOP)
+if(DEBUG)
     include(FetchContent)
     FetchContent_Declare(
         json
@@ -123,5 +129,5 @@ if(DEVELOP)
     )
     FetchContent_MakeAvailable(json)
     target_link_libraries(mcaat PRIVATE nlohmann_json::nlohmann_json)
-    target_compile_definitions(mcaat PRIVATE DEVELOP)
+    target_compile_definitions(mcaat PRIVATE DEBUG)
 endif()

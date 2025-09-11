@@ -17,9 +17,15 @@ WORKDIR /app
 # Clone your repo
 RUN git clone --recurse-submodules https://github.com/RNABioInfo/mcaat.git .
 
+# Build with default release (no option needed)
 RUN mkdir build && cd build && \
-    cmake .. && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc)
+
+# For debug build (uncomment if needed):
+# RUN mkdir build && cd build && \
+#     cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_DEBUG=ON && \
+#     make -j$(nproc)
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
