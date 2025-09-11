@@ -309,33 +309,19 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
         // Process all neighbors to maintain correctness (removed faulty simple path optimization)
         // Process neighbors in forward order (SIMD-friendly pattern from megahit)
         // Unroll loop for small outdegrees to reduce overhead
-        if (__builtin_expect(outdegree <= 4, 1)) {
-            // Unrolled loop for common case (de Bruijn graph max degree = 4)
-            for (int i = 0; i < outdegree; ++i) {
-                uint64_t neighbor = neighbors[i];
-                auto visited_it = dls_visited.find(neighbor);
-                bool not_visited = (visited_it == dls_visited.end());
-                bool is_start_revisit = (neighbor == start_node && depth > 0);
+        // Unrolled loop for common case (de Bruijn graph max degree = 4)
+        for (int i = 0; i < outdegree; ++i) {
+            uint64_t neighbor = neighbors[i];
+            auto visited_it = dls_visited.find(neighbor);
+            bool not_visited = (visited_it == dls_visited.end());
+            bool is_start_revisit = (neighbor == start_node && depth > 0);
                 
-                if (__builtin_expect(not_visited || is_start_revisit, 1)) {
-                    dls_visited.insert(neighbor);
-                    dls_stack.push_back({neighbor, depth + 1});
-                }
-            }
-        } else {
-            // Fallback for rare cases with higher degree
-            for (int i = 0; i < outdegree; ++i) {
-                uint64_t neighbor = neighbors[i];
-                auto visited_it = dls_visited.find(neighbor);
-                bool not_visited = (visited_it == dls_visited.end());
-                bool is_start_revisit = (neighbor == start_node && depth > 0);
-                
-                if (not_visited || is_start_revisit) {
-                    dls_visited.insert(neighbor);
-                    dls_stack.push_back({neighbor, depth + 1});
-                }
+            if (__builtin_expect(not_visited || is_start_revisit, 1)) {
+                dls_visited.insert(neighbor);
+                dls_stack.push_back({neighbor, depth + 1});
             }
         }
+        
 
         // Megahit-style aggressive early cycle detection
         if (__builtin_expect(v == target_node && depth > 1, 0)) {
