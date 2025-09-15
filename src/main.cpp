@@ -353,9 +353,9 @@ int main(int argc, char** argv) {
    
     int length_bound = 77;
     SDBG sdbg;
-    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
+    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-27_09-53-11/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
     string graph_folder_old = settings.graph_folder;///vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46
-    settings.graph_folder=folders[1];
+    settings.graph_folder=folders[0];
     char * cstr = new char [settings.graph_folder.length()+1];
     std::strcpy (cstr, settings.graph_folder.c_str());
     cout << "Graph folder: " << cstr << endl;
@@ -366,7 +366,25 @@ int main(int argc, char** argv) {
     
     delete[] cstr;
 
-    
+        
+    string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
+    uint8_t end_seq[24];
+    for (int i = 0; i < 23; ++i) {
+        end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
+    }
+    int64_t end_node = sdbg.IndexBinarySearch(end_seq);
+    cout<<"EdgeMultiplicity: "<<sdbg.EdgeMultiplicity(end_node)<<endl;
+    cout<<"Indegree: "<<sdbg.EdgeIndegree(end_node)<<endl;
+    cout<<"Outdegree: "<<sdbg.EdgeOutdegree(end_node)<<endl;
+    // %% LOAD GRAPH %%
+    cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
+    PhageCurator phage_curator(sdbg);
+    std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_node, 1000,5000);
+    phage_curator.ReconstructPaths(paths);
+    for(const auto& sequence : phage_curator.reconstructed_sequences) {
+        std::cout << sequence << std::endl;
+    }
+/*
     // %% FBCE ALGORITHM %%
     cout << "FBCE FROM DEBUG START:" << endl;
     auto start_time = chrono::high_resolution_clock::now();
@@ -392,7 +410,8 @@ int main(int argc, char** argv) {
 
     // %% DELETE THE GRAPH FOLDER %%
     //fs::remove_all(graph_folder_old);
-    // %% DELETE THE GRAPH FOLDER %%            
+    // %% DELETE THE GRAPH FOLDER %%          
+    */  
 }
 #else
 int main(int argc, char** argv) {

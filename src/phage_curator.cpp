@@ -2,6 +2,8 @@
 #include <fstream>
 #include <deque>
 #include <cstdio> // for std::remove
+#include <parallel_hashmap/phmap.h>  // For phmap optimizations
+#include <functional>  // For std::function callback
 
 
 
@@ -13,7 +15,7 @@ PhageCurator::PhageCurator(SDBG& sdbg) : sdbg(sdbg) {
 string PhageCurator::_FetchFirstNode(size_t node) {
     std::string label;            
     uint8_t seq[sdbg.k()];
-    uint32_t t = sdbg.GetLabel(node, seq);
+    sdbg.GetLabel(node, seq);
     for (int i = sdbg.k() - 1; i >= 0; --i) label.append(1, "ACGT"[seq[i] - 1]);
     reverse(label.begin(), label.end());
     return label;
@@ -41,83 +43,127 @@ void PhageCurator::ReconstructPaths(std::vector<std::vector<uint64_t>> paths) {
     return;
 }
 
-// Add this new function to CycleFinder:
-std::vector<std::vector<uint64_t>> PhageCurator::DepthLimitedPaths(uint64_t start, int lower, int higher) {
+// Adapted DepthLimitedPaths with optimizations from DepthLevelSearch (no logic changes)
+std::vector<std::vector<uint64_t>> PhageCurator::DepthLimitedPaths(uint64_t start, int lower, int higher, std::function<void(const std::vector<uint64_t>&)> path_callback) {
     std::vector<std::vector<uint64_t>> all_paths;
-    std::deque<std::pair<uint64_t, std::vector<uint64_t>>> dls_stack;
+    if (!path_callback) {
+        all_paths.reserve(1024);  // Pre-allocate if collecting
+    }
+    std::vector<std::pair<uint64_t, std::vector<uint64_t>>> dls_stack;
     dls_stack.emplace_back(start, std::vector<uint64_t>{start});
 
-    // Spill-to-disk parameters
-    const size_t max_stack_nodes = 10000; // keep last 10000 in memory
-    const std::string temp_file = "dls_stack_spill.tmp";
+    // Thread-local pools (extended for paths)
+    static thread_local std::vector<std::pair<uint64_t, std::vector<uint64_t>>> stack_pool;
+    static thread_local phmap::flat_hash_set<uint64_t> visited_pool;
+    static thread_local std::vector<std::vector<uint64_t>> path_pool;
 
-    auto spill_stack_to_file = [&](std::deque<std::pair<uint64_t, std::vector<uint64_t>>>& stack) {
-        std::ofstream ofs(temp_file, std::ios::app | std::ios::binary);
-        // Spill oldest entries, keep last max_stack_nodes
-        while (stack.size() > max_stack_nodes) {
-            auto& entry = stack.front();
-            uint64_t node = entry.first;
-            const auto& path = entry.second;
-            ofs.write(reinterpret_cast<const char*>(&node), sizeof(node));
-            size_t path_size = path.size();
-            ofs.write(reinterpret_cast<const char*>(&path_size), sizeof(path_size));
-            ofs.write(reinterpret_cast<const char*>(path.data()), path_size * sizeof(uint64_t));
-            stack.pop_front();
+    // Clear but keep capacity (reuse pattern)
+    stack_pool.clear();
+    visited_pool.clear();
+    path_pool.clear();
+
+    // Reserve initial capacities
+    if (stack_pool.capacity() == 0) {
+        stack_pool.reserve(64);
+    }
+    if (visited_pool.capacity() == 0) {
+        visited_pool.reserve(1024);
+    }
+    if (path_pool.capacity() == 0) {
+        path_pool.reserve(64);
+    }
+
+    // Use pooled structures
+    auto& pooled_visited = visited_pool;
+    auto& pooled_paths = path_pool;
+
+    // Cache values
+    const uint64_t start_node = start;
+    const int min_depth = lower;
+    const int max_depth = higher;
+
+    // Helper to get or create a path vector from pool (with shrinking)
+    auto get_path_from_pool = [&]() -> std::vector<uint64_t>& {
+        if (pooled_paths.empty()) {
+            pooled_paths.emplace_back();
+            pooled_paths.back().reserve(max_depth + 1);  // Pre-reserve based on max depth
         }
-        ofs.close();
+        auto& path = pooled_paths.back();
+        path.clear();
+        return path;
     };
 
-    auto load_stack_from_file = [&](std::deque<std::pair<uint64_t, std::vector<uint64_t>>>& stack) {
-        std::ifstream ifs(temp_file, std::ios::binary);
-        if (!ifs) return;
-        while (ifs.peek() != EOF) {
-            uint64_t node;
-            size_t path_size;
-            ifs.read(reinterpret_cast<char*>(&node), sizeof(node));
-            ifs.read(reinterpret_cast<char*>(&path_size), sizeof(path_size));
-            std::vector<uint64_t> path(path_size);
-            ifs.read(reinterpret_cast<char*>(path.data()), path_size * sizeof(uint64_t));
-            stack.emplace_back(node, std::move(path));
-        }
-        ifs.close();
-        std::remove(temp_file.c_str());
-    };
-
-    while (!dls_stack.empty() || std::ifstream(temp_file).good()) {
-        // Spill stack if too large (keep only last max_stack_nodes)
-        if (dls_stack.size() > max_stack_nodes) {
-            std::cout << "Triggering spill, stack size: " << dls_stack.size() << std::endl;
-            std::cout << "Spilling " << dls_stack.size() - max_stack_nodes << " entries to " << temp_file << std::endl;
-            spill_stack_to_file(dls_stack);
-        }
-        // Reload stack from file only if empty
-        if (dls_stack.empty() && std::ifstream(temp_file).good()) {
-            load_stack_from_file(dls_stack);
-        }
-        if (dls_stack.empty()) break;
-
+    while (!dls_stack.empty()) {
         auto [v, path] = dls_stack.back();
         dls_stack.pop_back();
 
-        if ((int)path.size() - 1 >= lower && (int)path.size() - 1 <= higher) {
-            all_paths.push_back(path);
+        int current_depth = (int)path.size() - 1;
+        if (__builtin_expect(current_depth >= min_depth && current_depth <= max_depth, 1)) {
+            if (path_callback) {
+                path_callback(path);
+            } else {
+                all_paths.push_back(path);
+            }
             continue;
         }
 
-        std::unordered_set<uint64_t> adj;
-        adj.reserve(kAlphabetSize + 1);
-        graph_generic_func::_GetOutgoings(v, adj, sdbg);
+        // Early check for zero outdegree (from DepthLevelSearch)
+        if (__builtin_expect(sdbg.EdgeOutdegreeZero(v), 0)) {
+            continue;
+        }
 
-        for (uint64_t neighbor : adj) {
-            // Prevent cycles in path
-            if (std::find(path.begin(), path.end(), neighbor) == path.end()) {
-                auto new_path = path;
-                new_path.push_back(neighbor);
-                dls_stack.emplace_back(neighbor, std::move(new_path));
+        int outdegree = sdbg.EdgeOutdegree(v);
+        if (__builtin_expect(outdegree == 0 || !sdbg.IsValidEdge(v), 0)) {
+            continue;
+        }
+
+        // Fixed-size array for neighbors (from DepthLevelSearch)
+        const int MAX_EDGE_COUNT = 4;
+        uint64_t neighbors[MAX_EDGE_COUNT];
+        int flag = sdbg.OutgoingEdges(v, neighbors);
+        if (__builtin_expect(flag == -1, 0)) {
+            continue;
+        }
+
+        // Prefetch neighbors (from DepthLevelSearch)
+        __builtin_prefetch(&neighbors[0], 0, 1);
+
+        for (int i = 0; i < outdegree; ++i) {
+            uint64_t neighbor = neighbors[i];
+            // Prevent cycles (logic unchanged)
+            if (__builtin_expect(std::find(path.begin(), path.end(), neighbor) == path.end(), 1)) {
+                // Global visited check (phmap from DepthLevelSearch)
+                auto visited_it = pooled_visited.find(neighbor);
+                bool not_visited = (visited_it == pooled_visited.end());
+                bool is_start_revisit = (neighbor == start_node && current_depth > 0);
+
+                if (__builtin_expect(not_visited || is_start_revisit, 1)) {
+                    pooled_visited.insert(neighbor);
+                    auto new_path = get_path_from_pool();
+                    new_path = path;
+                    new_path.push_back(neighbor);
+                    // Extend along simple path using Megahit's NextSimplePathEdge
+                    uint64_t current = neighbor;
+                    while (true) {
+                        uint64_t next = sdbg.NextSimplePathEdge(current);
+                        if (next == SDBG::kNullID || (int)new_path.size() - 1 >= max_depth) {
+                            break;
+                        }
+                        new_path.push_back(next);
+                        current = next;
+                    }
+                    dls_stack.emplace_back(current, std::move(new_path));
+                    // After moving, shrink the pooled vector if it's oversized
+                    if (!pooled_paths.empty()) {
+                        auto& last_path = pooled_paths.back();
+                        if (last_path.capacity() > (max_depth + 1) * 2) {  // If capacity is >2x needed
+                            last_path.shrink_to_fit();  // Shrink to actual size
+                        }
+                    }
+                }
             }
         }
     }
-    std::remove(temp_file.c_str());
     return all_paths;
 }
 

@@ -7,7 +7,12 @@
 ---
 
 ### 🥳 NEWS
-Docker container available under: https://hub.docker.com/r/feeka94/mcaat
+- Docker container available under: https://hub.docker.com/r/feeka94/mcaat
+- Version 0.3 makes use of following optimization techniques:
+  - Better data structures for preprocessing, `phmap::flat_hash_set`
+  - Added compiler intrinsics to guide the hardware in the right direction
+  - Reserving the capacity to prevent rehashing
+In depth technical details: [educational resource](./src/z_educational_guide.md) and [optimization developer notes](./src/z_optimization_dev_notes.md). As a result of the above optimizations we achieved __17-25__ times speedup in __1billion__ node graph(from 3 <span style="color:red">* __days__*</span> to 3 <span style="color:green">*__hours__*</span>). Considering the complexity of the graphs, this is a huge improvement.
 
 
 ### Installation using docker

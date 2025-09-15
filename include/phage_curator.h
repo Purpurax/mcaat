@@ -7,6 +7,7 @@
 #include "graph_generic_func.h"
 #include <string>
 #include <stack>
+#include <functional>
 using namespace std;
 
 struct BeamPathInfo {
@@ -26,7 +27,8 @@ public:
     //ctor
     PhageCurator(SDBG& sdbg);
     std::vector<std::string> reconstructed_sequences;
-    std::vector<std::vector<uint64_t>> DepthLimitedPaths(uint64_t start, int lower,int higher);
+    std::vector<std::vector<uint64_t>> DepthLimitedPaths(uint64_t start, int lower, int higher, std::function<void(const std::vector<uint64_t>&)> path_callback = nullptr);
+    std::vector<std::vector<uint64_t>> ProcessPathsFromFile(const std::string& file_path, size_t min_group_size);
     void ReconstructPaths(std::vector<std::vector<uint64_t>> paths);
     std::vector<BeamPathInfo> BeamSearchPaths(uint64_t start, int length, int beam_width);
 };

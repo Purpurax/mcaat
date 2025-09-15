@@ -1,6 +1,6 @@
 # Understanding Key C++ Features for Performance Optimization
 
-This guide explains four key C++ features used in performance-critical algorithms like graph traversal (e.g., `CycleFinder::DepthLevelSearch`): `__builtin_expect`, `__builtin_prefetch`, `thread_local`, and `phmap::flat_hash_set`. These tools optimize branch prediction, memory access, thread safety, and data structure performance, particularly in the context of graph algorithms like cycle detection in de Bruijn graphs. Each section describes what the feature is, why it matters, how it’s used in your code, and best practices, with comparisons to standard alternatives where relevant.
+This guide explains four key C++ features used in performance-critical algorithms like graph traversal (e.g., `CycleFinder::DepthLevelSearch`): `__builtin_expect`, `__builtin_prefetch`, `thread_local`, and `phmap::flat_hash_set`. These tools optimize branch prediction, memory access, thread safety, and data structure performance, particularly in the context of graph algorithms like cycle detection in de Bruijn graphs. Each section describes what the feature is, why it matters, how it’s used in code, and best practices, with comparisons to standard alternatives where relevant.
 
 ## 1. `__builtin_expect`: Guiding Branch Prediction
 
@@ -13,7 +13,7 @@ This guide explains four key C++ features used in performance-critical algorithm
   - **Returns**: The value of `expression`, unchanged; it’s purely an optimization hint.
 
 ### Why It Matters
-Modern CPUs use **branch prediction** to guess whether a branch (e.g., `if` or `else`) will be taken, fetching instructions ahead of time to keep the CPU pipeline full. A **misprediction** (wrong guess) causes the CPU to discard fetched instructions, wasting 10–20 cycles. By using `__builtin_expect`, you guide the compiler to:
+Modern CPUs use **branch prediction** to guess whether a branch (e.g., `if` or `else`) will be taken, fetching instructions ahead of time to keep the CPU pipeline full. A **misprediction** (wrong guess) causes the CPU to discard fetched instructions, wasting 10–20 cycles. By using `__builtin_expect`, one guides the compiler to:
 - Optimize the likely code path, placing it in faster execution slots.
 - Reduce branch misprediction penalties, improving runtime by 5–15% in branch-heavy code.
 
@@ -41,8 +41,7 @@ if (__builtin_expect(depth >= limit, 0)) {
 - **Impact**: Ensures the CPU prioritizes the deeper exploration path, common in depth-limited searches.
 
 ### Best Practices
-- **Use when confident**: Only apply `__builtin_expect` when you know the likely outcome (e.g., most nodes have edges in your graph). Incorrect hints can worsen performance.
-- **Profile your code**: Use tools like `perf` (Linux) or Intel VTune to measure branch mispredictions and validate your assumptions.
+- **Use when confident**: Only apply `__builtin_expect` when it is known the likely outcome (e.g., most nodes have edges in graph). Incorrect hints can worsen performance.
 - **Portability**: `__builtin_expect` is GCC/Clang-specific. For cross-platform code, use a macro:
 
 ```cpp
@@ -76,7 +75,7 @@ if (UNLIKELY(sdbg.EdgeOutdegreeZero(v))) { ... }
 Memory access is a major bottleneck in algorithms like graph traversal, where data (e.g., neighbor lists) is accessed irregularly. Prefetching moves data into the cache early, reducing CPU stalls when the data is needed. This can improve performance by 10–20% in memory-bound code.
 
 ### Example in `CycleFinder::DepthLevelSearch`
-In your function:
+in function:
 
 ```cpp
 __builtin_prefetch(&neighbors[0], 0, 1);
@@ -112,7 +111,7 @@ __builtin_prefetch(&neighbors[0], 0, 1);
 In multithreaded applications, sharing data between threads often requires synchronization (e.g., mutexes), which can be slow and complex. `thread_local` avoids this by giving each thread its own copy of a variable, eliminating contention and the need for locks. This is particularly useful in performance-critical code like graph algorithms, where threads may process different parts of the graph concurrently.
 
 ### Example in `CycleFinder::DepthLevelSearch`
-In your function:
+in function:
 
 ```cpp
 static thread_local std::vector<StackEntry> dls_stack_pool;
@@ -132,9 +131,9 @@ static thread_local phmap::flat_hash_set<uint64_t> dls_visited_pool;
 
 ### Best Practices
 - **Use for thread-specific data**: Apply `thread_local` to variables that need to be unique per thread, like temporary buffers or state in parallel algorithms.
-- **Minimize initialization cost**: Ensure the variable’s constructor is lightweight, as it runs per thread. In your code, `std::vector` and `phmap::flat_hash_set` have fast default constructors.
-- **Clear, don’t destroy**: Reuse `thread_local` containers (e.g., `clear()`) to avoid reallocation, as seen in your code.
-- **Portability**: `thread_local` is standard C++11, supported by all modern compilers (GCC, Clang, MSVC), but ensure your runtime environment supports threading.
+- **Minimize initialization cost**: Ensure the variable’s constructor is lightweight, as it runs per thread. in code, `std::vector` and `phmap::flat_hash_set` have fast default constructors.
+- **Clear, don’t destroy**: Reuse `thread_local` containers (e.g., `clear()`) to avoid reallocation, as seen in code.
+- **Portability**: `thread_local` is standard C++11, supported by all modern compilers (GCC, Clang, MSVC), but ensure  runtime environment supports threading.
 
 ## 4. `phmap::flat_hash_set`: High-Performance Hash Set
 
@@ -150,7 +149,7 @@ static thread_local phmap::flat_hash_set<uint64_t> dls_visited_pool;
 In graph algorithms like cycle detection, checking if a node has been visited (e.g., `dls_visited.find(neighbor)`) is frequent and performance-critical. A fast hash set reduces lookup and insertion time, and `phmap::flat_hash_set` outperforms `std::unordered_set` due to its cache-efficient design, often achieving 2–3x faster operations in practice.
 
 ### Example in `CycleFinder::DepthLevelSearch`
-In your function:
+in function:
 
 ```cpp
 static thread_local phmap::flat_hash_set<uint64_t> dls_visited_pool;
@@ -178,13 +177,13 @@ if (not_visited || is_start_revisit) {
   - **Why `phmap::flat_hash_set` is better**: Faster and more cache-efficient for unordered data like visited node tracking, where ordering (provided by `std::set`) isn’t needed.
 
 ### Comparison to `std::vector`
-While `phmap::flat_hash_set` is used for `dls_visited_pool`, your code uses `std::vector` for `dls_stack_pool`. Let’s compare:
+While `phmap::flat_hash_set` is used for `dls_visited_pool`,  code uses `std::vector` for `dls_stack_pool`. Let’s compare:
 - **Structure**:
   - `phmap::flat_hash_set`: Optimized for fast lookups and insertions, with no ordering.
   - `std::vector`: A dynamic array optimized for sequential access and stack-like operations (e.g., `push_back`, `pop_back`).
 - **Use case**:
-  - `phmap::flat_hash_set`: Ideal for `dls_visited_pool`, where you need O(1) lookups to check if a node is visited.
-  - `std::vector`: Perfect for `dls_stack_pool`, where you need a LIFO (last-in, first-out) stack for DFS, with fast `push_back` and `pop_back`.
+  - `phmap::flat_hash_set`: Ideal for `dls_visited_pool`, where one needs O(1) lookups to check if a node is visited.
+  - `std::vector`: Perfect for `dls_stack_pool`, where one needs a LIFO (last-in, first-out) stack for DFS, with fast `push_back` and `pop_back`.
 - **Performance**:
   - `phmap::flat_hash_set`: O(1) for lookups and insertions, but with hashing overhead.
   - `std::vector`: O(1) amortized for `push_back`/`pop_back`, with minimal overhead for sequential access.
@@ -192,9 +191,9 @@ While `phmap::flat_hash_set` is used for `dls_visited_pool`, your code uses `std
 
 ### Best Practices
 - **Use `phmap::flat_hash_set` for lookups**: Ideal for sets of keys (e.g., node IDs) where fast O(1) access is needed, as in visited node tracking.
-- **Reserve capacity**: Call `reserve` to preallocate space (e.g., `dls_visited_pool.reserve(n)`) to avoid rehashing, though your code reuses capacity via `clear()`.
+- **Reserve capacity**: Call `reserve` to preallocate space (e.g., `dls_visited_pool.reserve(n)`) to avoid rehashing, though  code reuses capacity via `clear()`.
 - **Consider alternatives for small sets**: For very small graphs, a `std::vector` with linear search might be faster due to lower overhead, but `phmap::flat_hash_set` excels for larger graphs.
-- **Portability**: `phmap::flat_hash_set` requires the Parallel Hashmap library, not part of the C++ standard. Ensure it’s included in your project, or fall back to `std::unordered_set` for portability (with a performance cost).
+- **Portability**: `phmap::flat_hash_set` requires the Parallel Hashmap library, not part of the C++ standard. Ensure it’s included in project, or fall back to `std::unordered_set` for portability (with a performance cost).
 
 ## Applying to Graph Traversal
 In `CycleFinder::DepthLevelSearch`, these features optimize:
