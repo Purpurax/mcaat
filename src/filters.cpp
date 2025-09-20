@@ -13,43 +13,6 @@ string Filters::_FetchNodeLabel(size_t node) {
     reverse(label.begin(), label.end());
     return label;
 }
-Filters::Filters(SDBG& sdbg, std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles)
-    : sdbg(sdbg), cycles(cycles) {}
-
-    std::vector<uint64_t> Filters::FindRepeatNodePaths(vector<uint64_t> repeat_nodes, uint64_t start_node) {
-        uint64_t start = 0;
-        vector<uint64_t> all_the_neighbors;
-
-        for (const auto& node : repeat_nodes) {
-            uint64_t outgoings[4];
-            int num_outgoings = this->sdbg.OutgoingEdges(node, outgoings);
-            for (int i = 0; i < num_outgoings; i++) {
-                all_the_neighbors.push_back(outgoings[i]);
-            }
-        }
-        for (const auto& node : repeat_nodes)
-            if (std::find(all_the_neighbors.begin(), all_the_neighbors.end(), node) == all_the_neighbors.end())
-                start = node;
-
-        int maxSize = 0;
-        vector<vector<uint64_t>> cycles_per_group = this->cycles[start_node];
-        std::vector<uint64_t> arr;
-        auto it = std::find(arr.begin(), arr.end(), start);
-        int position_to_rotate = std::distance(arr.begin(), it);
-
-        for (int i = 0; i < cycles_per_group.size(); i++) {
-            if (cycles_per_group[i].size() > maxSize) {
-                maxSize = cycles_per_group[i].size();
-                arr = cycles_per_group[i];
-            }
-        }
-
-        arr.resize(repeat_nodes.size());
-        return arr;
-    }
-
-    pair<vector<uint64_t>, vector<vector<uint64_t>>> Filters::_FindCRISPRArrayNodes(uint64_t start_node) {
-        std::unordered_map<uint64_t, int> element_count;
 
 unordered_map<string, vector<string>> Filters::ListArrays(
     vector<uint64_t> node_order,
@@ -124,26 +87,6 @@ unordered_map<string, vector<string>> Filters::ListArrays(
         return CRISPRArrays;
     }
 
-    int Filters::WriteToFile(const string& filename) {
-        ofstream file(filename);
-        if (!file.is_open()) {
-            throw runtime_error("Failed to open file: " + filename);
-        }
-        int number_of_spacers = 0;
-        auto CRISPRArrays = ListArrays(number_of_spacers);
-        for (const auto& [repeat, spacers] : CRISPRArrays) {
-            file << "Repeat: " << repeat << endl;
-            file << "Number of Spacers: " << spacers.size() << endl;
-            file << "Spacers:" << endl;
-            for (const auto& spacer : spacers) {
-                file << spacer << endl;
-            }
-            file << "----------------------------------" << endl;
-        }
-        file.close();
-        return number_of_spacers;
-    }
-    
     return CRISPRArrays;
 }
 
