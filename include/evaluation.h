@@ -60,24 +60,76 @@ using namespace std;
  * 
  * @return Value between 0 and 1 for how similar the sequences are (float)
  */
-float get_similarity(const string& s1, const string& s2);
+float get_string_similarity(const string& s1, const string& s2);
 
 /**
- * @brief Returns a similarity value of the sequence to the best matching expected sequences
+ * @brief Get the spacer order similarity by variant
  * 
- * Overall it overestimates the similarity values finding a greedy match and removing that match from the expected sequences.
+ * Best explained with an example:
+ *  - spacers: A B C D
+ *  - expected_sequence: _B_C_A_D_
+ * with ABCD are spacers and _ is some other sequence
  * 
- * @post expected_sequence will be modified and one elements will be removed (if possible)
+ * Variant 0: Comparing position by position
+ *  => N N N J
+ *  => result is 25%
  * 
- * @param sequence The actual result
- * @param expected_sequences The expected true result
+ * Variant 1: Compare each pair of spacers and if their order is in the expected
+ *  - spacer pairs: A->B, B->C, C->D
+ *  => N J J
+ *  => result is 66.6%
  * 
- * @return -1.0, if expected sequence is empty(float)
- * @return 0.0 <= similarity <= 1.0 (float) 
+ * Variant 2: Compare each possible pair of spacers and if their order is in there
+ *  - spacer pairs: A->B, A->C, A->D, B->C, B->D, C->D
+ *  => N N J J J J
+ *  => result is 66.6%
+ * 
+ * @note if the expected sequence contains duplicate spacer entries,
+ * the results become unpredictable.
+ * 
+ * @param spacers 
+ * @param expected_sequence 
+ * @param variant Number specifying the variant (0, 1, 2)
+ * 
+ * @return 0 <= similarity <= (float)
  */
-float compare_sequence_to_ground_of_truth(
+float get_spacer_order_similarity(
+    const vector<string>& spacers,
+    const string& expected_sequence,
+    int variant
+);
+
+/**
+ * @brief Get the number of duplicate spacers
+ * 
+ * Simply counts the amount of occurences of every spacer.
+ * If it occurs more than once, it adds it to the result
+ * 
+ * @param spacers 
+ * @param expected_sequence 
+ * 
+ * @return Amount of spacer duplicates (int)
+ */
+int get_number_of_duplicate_spacers(
+    const vector<string>& spacers,
+    const string& expected_sequence
+);
+
+/**
+ * @internal
+ * @brief Chooses the most similar sequence and removes it from the vector
+ * 
+ * @post choices will be modified and one elements will be removed (if possible)
+ * 
+ * @param sequence Used to compare and find the most similar
+ * @param choices Where to pop the sequence from
+ * 
+ * @return The most similar sequence (string)
+ * @return "", if choices is empty
+ */
+string pop_most_similar_sequence(
     const string& sequence,
-    vector<string>& expected_sequences
+    vector<string>& choices
 );
 
 #endif

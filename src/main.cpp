@@ -614,31 +614,50 @@ int main(int argc, char** argv) {
         cout << benchmark_sequences.size() << " sequences" << endl;
 
         size_t no_match_count = 0;
-        float average_similarity = 0.0;
+        float average_sequence_similarity = 0.0;
         for (const auto& [sequence, repeat, spacers] : found_systems) {
-            const auto similarity = compare_sequence_to_ground_of_truth(
-                sequence,
-                benchmark_sequences
+            // This leads to overestimation by choosing greedy
+            const auto expected_sequence = pop_most_similar_sequence(
+                sequence, benchmark_sequences
             );
-
-            if (similarity == -1.0) {
+            if (expected_sequence == "") {
                 cout << "    ▸ No expected match for sequence: ";
                 cout << sequence << endl;
                 no_match_count++;
-            } else {
-                cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
-                cout << (similarity * 100) << "% similarity with ";
-                cout << spacers.size() << " spacers, repeat: ";
-                cout << repeat << ", and sequence: ";
-                cout << sequence << endl;
-                average_similarity += similarity;
+                continue;
             }
-        }
-        average_similarity /= static_cast<float>(found_systems.size() - no_match_count);
+            
+            const auto sequence_similarity = get_string_similarity(
+                sequence, expected_sequence
+            );
+            vector<float> spacer_similarity = {0.0, 0.0, 0.0};
+            for (int variant = 0; variant < 3; ++variant) {
+                spacer_similarity[variant] = get_spacer_order_similarity(
+                    spacers, expected_sequence, variant
+                );
+            }
 
-        cout << "  ▸ The average similarity is ";
+            const auto amount_of_duplicate_spacers = get_number_of_duplicate_spacers(
+                spacers, expected_sequence
+            );
+
+            cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
+            cout << (sequence_similarity * 100) << "% sequence similarity, ";
+            cout << (spacer_similarity[0] * 100) << "% spacer similarity variant 0, ";
+            cout << (spacer_similarity[1] * 100) << "% spacer similarity variant 1, ";
+            cout << (spacer_similarity[2] * 100) << "% spacer similarity variant 2, ";
+            cout << "with ";
+            cout << spacers.size() << " spacers, ";
+            cout << amount_of_duplicate_spacers << " duplicate spacers, and the repeat: ";
+            cout << repeat << ", and sequence: ";
+            cout << sequence << endl;
+            average_sequence_similarity += sequence_similarity;
+        }
+        average_sequence_similarity /= static_cast<float>(found_systems.size() - no_match_count);
+
+        cout << "  ▸ The average sequence similarity is ";
         cout << std::fixed << std::setprecision(2);
-        cout << (average_similarity * 100);
+        cout << (average_sequence_similarity * 100);
         cout << "% with " << no_match_count << "/" << found_systems.size();
         cout << " ignored" << endl;
 
