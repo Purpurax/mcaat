@@ -59,6 +59,7 @@ include_directories(${phmap_SOURCE_DIR})
 # Source files
 file(GLOB_RECURSE MAIN_SOURCE "src/*.cpp")
 file(GLOB_RECURSE INCLUDES "include/*.h")
+list(APPEND MAIN_SOURCE src/isolate_protospacers.cpp)
 file(GLOB_RECURSE ASMBL_SOURCE "libs/megahit/src/assembly/*.cpp")
 file(GLOB_RECURSE LCASM_SOURCE "libs/megahit/src/localasm/*.cpp")
 file(GLOB_RECURSE IDBA_SOURCE "libs/megahit/src/idba/*.cpp")
