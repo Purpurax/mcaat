@@ -35,6 +35,7 @@ FetchContent_MakeAvailable(phmap)
 
 find_package(OpenMP REQUIRED)
 find_package(Threads REQUIRED)
+find_package(BZip2 REQUIRED)
 
 # Options
 option(COVERAGE "Generate coverage report" ON)
@@ -51,14 +52,38 @@ endif()
 
 # Include directories
 include_directories(include)
+include_directories(tests)
+
+add_subdirectory(libs/cft)
+include_directories(libs/cft/src)
+
+add_subdirectory(libs/googletest)
+include_directories(libs/googletest/googletest/include)
+
+add_subdirectory(libs/kseqpp)
+include_directories(libs/kseqpp/include)
+
 include_directories(libs/megahit/src)
+
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
 include_directories(${phmap_SOURCE_DIR})
 
+# Include fmt
+include(FetchContent)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 10.2.1
+)
+FetchContent_MakeAvailable(fmt)
+
 # Source files
 file(GLOB_RECURSE MAIN_SOURCE "src/*.cpp")
+file(GLOB_RECURSE SOURCES_WITHOUT_MAIN "src/*.cpp")
+list(REMOVE_ITEM SOURCES_WITHOUT_MAIN "${CMAKE_SOURCE_DIR}/src/main.cpp")
 file(GLOB_RECURSE INCLUDES "include/*.h")
+file(GLOB_RECURSE TESTS_SOURCE "tests/*.cpp")
 file(GLOB_RECURSE ASMBL_SOURCE "libs/megahit/src/assembly/*.cpp")
 file(GLOB_RECURSE LCASM_SOURCE "libs/megahit/src/localasm/*.cpp")
 file(GLOB_RECURSE IDBA_SOURCE "libs/megahit/src/idba/*.cpp")
@@ -85,6 +110,21 @@ if (STATIC_BUILD)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif (STATIC_BUILD)
 
+# Testing
+enable_testing()
+set(TEST_IMPL_SOURCES
+    ${SOURCES_WITHOUT_MAIN}
+    ${ASMBL_SOURCE}
+    ${IDBA_SOURCE}
+    ${SDBG_SOURCE}
+    ${LCASM_SOURCE}
+    ${SEQ_SOURCE}
+    ${CX1_SOURCE}
+    ${TOOLKIT_SOURCE}
+    ${PROGRESSBAR_SOURCE}
+    ${SOME_OTHERS}
+)
+
 # Compiler and linker flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
@@ -99,8 +139,17 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -ggdb -O1 -D_LIBCPP_DEBUG -D_GLIBCXX_DEBUG")
 
 # Add executable
-add_executable(mcaat ${MAIN_SOURCE} ${ASMBL_SOURCE} ${IDBA_SOURCE} ${SDBG_SOURCE} ${LCASM_SOURCE}
-    ${SEQ_SOURCE} ${CX1_SOURCE} ${TOOLKIT_SOURCE} ${OTHER_SOURCE} ${SOME_OTHERS})
+add_executable(mcaat
+    ${MAIN_SOURCE}
+    ${ASMBL_SOURCE}
+    ${IDBA_SOURCE}
+    ${SDBG_SOURCE}
+    ${LCASM_SOURCE}
+    ${SEQ_SOURCE}
+    ${CX1_SOURCE}
+    ${TOOLKIT_SOURCE}
+    ${SOME_OTHERS}
+)
 
 # Static build linker flags
 if (STATIC_BUILD)
@@ -109,17 +158,16 @@ if (STATIC_BUILD)
 endif (STATIC_BUILD)
 
 # Link libraries
-target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz)
+target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz fmt::fmt)
 
 # Threading configuration
 if(THREADS_HAVE_PTHREAD_ARG)
     target_compile_options(mcaat PUBLIC "-pthread")
 endif()
 if(CMAKE_THREAD_LIBS_INIT)
-    target_link_libraries(mcaat PRIVATE "${CMAKE_THREAD_LIBS_INIT}")
+    target_link_libraries(mcaat "${CMAKE_THREAD_LIBS_INIT}")
 endif()
 
-# Development features
 if(DEBUG)
     include(FetchContent)
     FetchContent_Declare(
@@ -131,3 +179,37 @@ if(DEBUG)
     target_link_libraries(mcaat PRIVATE nlohmann_json::nlohmann_json)
     target_compile_definitions(mcaat PRIVATE DEBUG)
 endif()
+
+# Doxygen Documenation for cpp configurations
+find_package(Doxygen)
+if (DOXYGEN_FOUND)
+    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/Doxyfile)
+    set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/include/Doxyfile)
+
+    configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} COPYONLY)
+
+    add_custom_target(doc
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+else()
+    message(STATUS "Doxygen not found, 'doc' target will not be available.")
+endif()
+
+# Testing
+# if (UNIT_TESTS)
+add_executable(runTests ${TESTS_SOURCE} ${TEST_IMPL_SOURCES})
+
+target_link_libraries(runTests
+    gtest
+    gtest_main
+    ${ZLIB_LIBRARIES}
+    pthread
+    fmt::fmt
+)
+
+include(GoogleTest)
+gtest_discover_tests(runTests)
+# endif()

@@ -6,8 +6,13 @@
 /data/
 /build/
 /CMakeFiles/
+/_deps/
 cmake_install.cmake
 CMakeCache.txt
 Makefile
 test
 test_ids
+
+**/tiny_graph
+*.timetracker
+libs/megahit

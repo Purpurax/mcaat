@@ -1,22 +1,15 @@
-//test myLib.h
 #include <iostream>
-#include "sdbg/sdbg.h"
-#include "cycle_finder.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <cstring>
+#include <cctype>
+#include <unordered_map>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "settings.h"
-#include "filters.h"
-#include <cstring>
-#include "sdbg_build.h"
-#include "post_processing.h"
-#include <cctype>
-#include <unordered_map>
-#include "phage_curator.h"
 #ifdef __linux__
 #include <sys/sysinfo.h>
 #elif defined(_WIN32)
@@ -27,6 +20,18 @@
 #ifdef DEVELOP
 #include "io_ops.h"
 #endif
+
+#include "cycle_finder.h"
+#include "filters.h"
+#include "jumps.h"
+#include "post_processing.h"
+#include "sdbg/sdbg.h"
+#include "sdbg_build.h"
+#include "settings.h"
+#include "spacer_ordering.h"
+#include "tmp_utils.h"
+#include "evaluation.h"
+
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -97,6 +102,7 @@ Settings parse_arguments(int argc, char* argv[]) {
                  << "  --ram <amount>                  RAM to use (e.g., 4G, 500M). Default: 95% of system RAM\n"
                  << "  --threads <num>                 Number of threads. Default: CPU cores - 2\n"
                  << "  --output-folder <path>          Output directory. If not provided, a timestamped folder is created\n"
+                 << "  --benchmark <file>              File containing expected crispr sequences line separated\n"
                  << "  --help, -h                      Show this help message\n";
             exit(0);
         }
@@ -108,6 +114,13 @@ Settings parse_arguments(int argc, char* argv[]) {
             }
             --i;
             required_files_provided = true;
+        } else if (arg == "--benchmark") {
+            if (++i < argc) {
+                settings.benchmark_file = argv[i];
+            } else {
+                throw runtime_error("Error: Missing value for --benchmark");
+            }
+            --i;
         } else if (arg == "--ram") {
             if (++i < argc) {
                 string ram_input = argv[i];
@@ -417,10 +430,9 @@ int main(int argc, char** argv) {
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
     Settings settings = parse_arguments(argc, argv);
-    string name_of_genome = "test";
     if (check_for_error(settings)){
-        //tell the user which folder we are deleting
-        cout<< "Folder " << settings.output_folder << " will be deleted due to errors." << endl;
+        cout << "Folder " << settings.output_folder;
+        cout << " will be deleted due to errors." << endl;
         
         cout << "Do you want that folder to be removed? (y/n): ";
         char answer;
@@ -439,47 +451,242 @@ int main(int argc, char** argv) {
     SDBGBuild sdbg_build(settings);
     // %% BUILD GRAPH %%
     
-   
-    int length_bound = 77;
-    SDBG sdbg;
-    string graph_folder_old = settings.graph_folder;
-    settings.graph_folder+="/graph";
-    char * cstr = new char [settings.graph_folder.length()+1];
-    std::strcpy (cstr, settings.graph_folder.c_str());
-    cout << "Graph folder: " << cstr << endl;
-    sdbg.LoadFromFile(cstr);
-    cout << "Loaded the graph" << endl;
-
     // %% LOAD GRAPH %%
-    
-    delete[] cstr;
+    const int length_bound = 77;
+    string graph_path = settings.graph_folder + "/graph";
+    cout << "Graph folder: " << graph_path << endl;
 
-    
+    SDBG sdbg;
+    sdbg.LoadFromFile(graph_path.c_str());
+    cout << "Loaded the graph" << endl;
+    // %% LOAD GRAPH %%
+
     // %% FBCE ALGORITHM %%
     cout << "FBCE START:" << endl;
-    auto start_time = chrono::high_resolution_clock::now();
     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
-    int number_of_spacers_total = 0;
-    auto cycles = cycle_finder.results;
-    cout << "Number of nodes in results: " << cycles.size() << endl;
+    auto cycles_map = cycle_finder.results;
+    cout << "Number of nodes in results: " << cycles_map.size() << endl;
     // %% FBCE ALGORITHM %%
     
-    int number_of_spacers = 0;
-    // %% FILTERS %%
-    cout << "FILTERS START:" << endl;
-    Filters filters(sdbg, cycles);
-    auto  SYSTEMS = filters.ListArrays(number_of_spacers);
-    cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
-    // %% FILTERS %%
-    //%% POST PROCESSING %%
+    // // %% FILTER CYCLES %%
+    // cout << "FILTER CYCLES START:" << endl;
+    // int amount_of_cycles_before = get_cycle_count(cycles_map);
+    // // keep_relevant_cycles(cycles_map);
+    // int amount_of_cycles_after = get_cycle_count(cycles_map);
+    // cout << amount_of_cycles_after << " out of ";
+    // cout << amount_of_cycles_before << " are kept" << endl;
+    // // %% FILTER CYCLES %%
+
+    std::chrono::_V2::system_clock::time_point start_time;
+    std::chrono::_V2::system_clock::time_point end_time;
+
+    cout << "\n══════════════════════════════════════════════" << endl;
+    cout << "🔸STEP 6: Creating the jumps" << endl;
+    cout << "══════════════════════════════════════════════" << endl;
+    start_time = std::chrono::high_resolution_clock::now();
+
+    auto fastq_files = get_fastq_files_from_settings(settings);
+    size_t biggest_jump_size = 0;
+    auto jumps = get_jumps_from_reads(
+        sdbg,
+        fastq_files.first,
+        fastq_files.second,
+        settings.threads,
+        biggest_jump_size
+    );
+    cout << "    ▸ Created " << jumps.size() << " jumps" << endl;
+
+    end_time = std::chrono::high_resolution_clock::now();
+    cout << "\n⏳ Time elapsed: ";
+    cout << std::fixed << std::setprecision(2);
+    cout << std::chrono::duration<double>(end_time - start_time).count();
+    cout << " seconds" << endl;
+
+    cout << "\n══════════════════════════════════════════════" << endl;
+    cout << "🔸STEP 7: Order the spacers" << endl;
+    cout << "══════════════════════════════════════════════" << endl;
+    start_time = std::chrono::high_resolution_clock::now();
+
+    
+    cout << "  ▸ Splitting into subproblems" << endl;
+    auto subgraphs = get_crispr_regions_extended_by_k(sdbg, biggest_jump_size, cycles_map);
+
+    cout << "  🔄 Filtering subproblems:" << endl;
+    vector<Graph> remaining_subgraphs;
+    vector<vector<Jump>> remaining_jumps;
+    vector<vector<vector<size_t>>> remaining_cycles;
+    for (size_t idx = 0; idx < subgraphs.size(); ++idx) {
+        const auto& subgraph = subgraphs[idx];
+        const auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
+        auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
+
+        get_minimum_cycles_for_full_coverage(relevant_cycles);
+        
+        // The assembly of megahit always assembles the graph in its reverse complement.
+        // We discard the reverse complement by assuming that it won't have any relevant jumps
+        if (relevant_jumps.size() == 0 || relevant_cycles.size() < 3) {
+            continue;
+        }
+
+        remaining_subgraphs.push_back(subgraph);
+        remaining_jumps.push_back(relevant_jumps);
+        remaining_cycles.push_back(relevant_cycles);
+    }
+    cout << "  ✅ Filtered out " << subgraphs.size()-remaining_subgraphs.size();
+    cout << "/" << subgraphs.size() << " subproblems" << endl;
+
+    
+    cout << "  🔄 Solving " << remaining_subgraphs.size();
+    cout << " subproblems..." << endl;
+    vector<tuple<string, string, vector<string>>> found_systems;
+    for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
+        const auto& subgraph = remaining_subgraphs[idx];
+        const auto& relevant_jumps = remaining_jumps[idx];
+        const auto& relevant_cycles = remaining_cycles[idx];
+        
+        cout << "    Subproblem " << idx + 1 << "/";
+        cout << remaining_subgraphs.size() << ":" << endl;
+        
+        cout << "      🛈 Graph with " << subgraph.nodes.size();
+        cout << " nodes and " << subgraph.edge_count() << " edges" << endl;
+
+        cout << "      🛈 Jumps with " << relevant_jumps.size() << "/";
+        cout << jumps.size() << " used" << endl;
+
+        cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
+        cout << get_cycle_count(cycles_map) << " used" << endl;
+
+        auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles);
+
+        cout << "      ▸ The order is ";
+        for (auto node : cycle_order) {
+            cout << node << " ";
+        }
+        cout << endl;
+
+        cout << "      ▸ Turning the cycle order into a node order" << endl;
+        auto ordered_cycles = get_ordered_cycles(cycle_order, relevant_cycles);
+        
+        if (ordered_cycles.size() < 2) {
+            cout << "      ▸ Node order is to short and is not processed further" << endl;
+            continue;
+        }
+
+        cout << "      ▸ Starting the filter process:" << endl;
+        auto [repeat, spacers, full_sequence] = get_systems(sdbg, ordered_cycles);
+        
+        cout << "        ▸ Number of spacers: " << spacers.size() << endl;
+
+        found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers));
+    }
+    cout << "  ✅ Completed each subproblem" << endl;
+
+    end_time = std::chrono::high_resolution_clock::now();
+    cout << "\n⏳ Time elapsed: ";
+    cout << std::fixed << std::setprecision(2);
+    cout << std::chrono::duration<double>(end_time - start_time).count();
+    cout << " seconds" << endl;
+
+
+    if (settings.benchmark_file != "") {
+        cout << "\n══════════════════════════════════════════════" << endl;
+        cout << "🔸STEP 8: Compare to ground of truth using benchmark file" << endl;
+        cout << "══════════════════════════════════════════════" << endl;
+        start_time = std::chrono::high_resolution_clock::now();
+    
+        vector<string> benchmark_sequences;
+        ifstream benchmark_in(settings.benchmark_file);
+        if (!benchmark_in) {
+            cerr << "Error: Could not open benchmark file: " << settings.benchmark_file << endl;
+        } else {
+            string line;
+            while (getline(benchmark_in, line)) {
+                if (!line.empty()) {
+                    benchmark_sequences.push_back(line);
+                }
+            }
+            benchmark_in.close();
+            cout << "Loaded " << benchmark_sequences.size() << " benchmark sequences." << endl;
+        }
+
+        cout << "  ▸ " << found_systems.size();
+        cout << " crispr sequences are found and benchmarked using ";
+        cout << benchmark_sequences.size() << " sequences" << endl;
+
+        size_t no_match_count = 0;
+        float average_sequence_similarity = 0.0;
+        for (const auto& [sequence, repeat, spacers] : found_systems) {
+            // This leads to overestimation by choosing greedy
+            const auto expected_sequence = pop_most_similar_sequence(
+                sequence, benchmark_sequences
+            );
+            if (expected_sequence == "") {
+                cout << "    ▸ No expected match for sequence: ";
+                cout << sequence << endl;
+                no_match_count++;
+                continue;
+            }
+            
+            const auto sequence_similarity = get_string_similarity(
+                sequence, expected_sequence
+            );
+            vector<float> spacer_similarity = {0.0, 0.0, 0.0};
+            for (int variant = 0; variant < 3; ++variant) {
+                spacer_similarity[variant] = get_spacer_order_similarity(
+                    spacers, expected_sequence, variant
+                );
+            }
+
+            const auto amount_of_duplicate_spacers = get_number_of_duplicate_spacers(
+                spacers, expected_sequence
+            );
+
+            cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
+            cout << (sequence_similarity * 100) << "% sequence similarity, ";
+            cout << (spacer_similarity[0] * 100) << "% spacer similarity variant 0, ";
+            cout << (spacer_similarity[1] * 100) << "% spacer similarity variant 1, ";
+            cout << (spacer_similarity[2] * 100) << "% spacer similarity variant 2, ";
+            cout << "with ";
+            cout << spacers.size() << " spacers, ";
+            cout << amount_of_duplicate_spacers << " duplicate spacers, and the repeat: ";
+            cout << repeat << ", and sequence: ";
+            cout << sequence << endl;
+            average_sequence_similarity += sequence_similarity;
+        }
+        average_sequence_similarity /= static_cast<float>(found_systems.size() - no_match_count);
+
+        cout << "  ▸ The average sequence similarity is ";
+        cout << std::fixed << std::setprecision(2);
+        cout << (average_sequence_similarity * 100);
+        cout << "% with " << no_match_count << "/" << found_systems.size();
+        cout << " ignored" << endl;
+
+        end_time = std::chrono::high_resolution_clock::now();
+        cout << "\n⏳ Time elapsed: ";
+        cout << std::fixed << std::setprecision(2);
+        cout << std::chrono::duration<double>(end_time - start_time).count();
+        cout << " seconds" << endl;
+    }
+    
+    cout << "══════════════════════════════════════════════" << endl;
+
+    // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
-    CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
+    unordered_map<string, vector<string>> all_systems;
+    for (const auto& [_sequence, repeat, spacers] : found_systems) {
+        all_systems[repeat] = spacers;
+    }
+    CRISPRAnalyzer analyzer(all_systems, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
-    //%% POST PROCESSING %%
+    // %% POST PROCESSING %%
 
     // %% DELETE THE GRAPH FOLDER %%
-    fs::remove_all(graph_folder_old);
+    try {
+        fs::remove_all(settings.graph_folder);
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Warning: Could not remove graph folder: " << e.what() << std::endl;
+    }
     // %% DELETE THE GRAPH FOLDER %%            
 }
 #endif
