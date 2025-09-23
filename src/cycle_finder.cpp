@@ -372,7 +372,7 @@ void CycleFinder::InvalidateMultiplicityOneNodes() {
 size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked) {
     uint64_t loaded = 0;
     const int chunk_size = 20000;
-    //this->InvalidateMultiplicityOneNodes();
+    this->InvalidateMultiplicityOneNodes();
     #pragma omp parallel num_threads(this->threads_count)
     {
         #pragma omp for schedule(dynamic, chunk_size)
