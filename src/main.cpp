@@ -320,7 +320,7 @@ int main(int argc, char** argv) {
     string cycles_file_path = settings.cycles_folder + "/labels.txt";
     IsolateProtospacers isolator(sdbg, cycles_file_path);
     pair<std::map<uint64_t,std::set<uint64_t>>,std::map<uint64_t,std::set<uint64_t>>> protospacer_nodes = isolator.getProtospacerNodes();
-    vector<vector<uint64_t>> paths_protospacers=isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.second, protospacer_nodes.first, 50,23);
+    auto paths_protospacers = isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.second, protospacer_nodes.first, 50, 23);
     cout << "Number of paths from incoming to outgoing protospacer nodes: " << paths_protospacers.size() << endl;
     /*for (const auto& path : paths_protospacers) {
         cout << "[";

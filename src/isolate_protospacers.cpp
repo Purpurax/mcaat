@@ -7,6 +7,21 @@ IsolateProtospacers::IsolateProtospacers(const SDBG& g, const std::string& cycle
     protospacerNodes = IsolateProtospacersMethod();
 }
 
+IsolateProtospacers::IsolateProtospacers(const SDBG& g, const std::map<uint64_t, std::vector<std::vector<uint64_t>>>& repeatToSpacerNodes) : graph(g) {
+    for (const auto& pair : repeatToSpacerNodes) {
+        uint64_t key = pair.first;
+        const auto& vecVec = pair.second;
+        std::set<uint64_t> nodes;
+        for (const auto& vec : vecVec) {
+            for (uint64_t node : vec) {
+                nodes.insert(node);
+            }
+        }
+        cycleNodes[key] = nodes;
+    }
+    protospacerNodes = IsolateProtospacersMethod();
+}
+
 std::map<uint64_t, std::set<uint64_t>> IsolateProtospacers::ReadCycles(const std::string& filePath) {
     std::map<uint64_t, std::set<uint64_t>> cyclesMap;
     std::set<uint64_t> allNodes;  // Big set for all nodes, as per user request
@@ -44,28 +59,16 @@ IN_OUT_PAIR_MAP_SET IsolateProtospacers::IsolateProtospacersMethod() {
     IN_OUT_PAIR_MAP_SET possibleProtospacerNodes;
     std::map<uint64_t, std::set<uint64_t>> possibleOutProtospacerNodes;
     std::map<uint64_t, std::set<uint64_t>> possibleInProtospacerNodes;
-    // create a new map that saves only the groups that have nodes that occur only once in that group using Counts like mechanism in python
-    std::map<uint64_t, std::set<uint64_t>> cycleNodesUnique;
+
+    // Collect all nodes that are part of any cycle
+    std::set<uint64_t> all_cycle_nodes;
     for (const auto& pair : cycleNodes) {
-        uint64_t k = pair.first;
-        const std::set<uint64_t>& values = pair.second;
-        std::map<uint64_t, int> nodeCount;
-        for (uint64_t v : values) {
-            nodeCount[v]++;
-        }
-        std::set<uint64_t> uniqueNodes;
-        for (const auto& countPair : nodeCount) {
-            if (countPair.second == 1) {
-                uniqueNodes.insert(countPair.first);
-            }
-        }
-        if (!uniqueNodes.empty()) {
-            cycleNodesUnique[k] = uniqueNodes;
+        for (uint64_t node : pair.second) {
+            all_cycle_nodes.insert(node);
         }
     }
 
-
-    for (const auto& pair : cycleNodesUnique) {
+    for (const auto& pair : cycleNodes) {
         uint64_t k = pair.first;
         const std::set<uint64_t>& values = pair.second;
 
@@ -76,7 +79,7 @@ IN_OUT_PAIR_MAP_SET IsolateProtospacers::IsolateProtospacersMethod() {
                 std::vector<uint64_t> outgoings(outdegree);
                 graph.OutgoingEdges(v, outgoings.data());
                 for (uint64_t neighbor : outgoings) {
-                    if (values.find(neighbor) == values.end()) {
+                    if (all_cycle_nodes.find(neighbor) == all_cycle_nodes.end()) {
                         possibleOutProtospacerNodes[k].insert(v);
                         break;
                     }
@@ -85,16 +88,16 @@ IN_OUT_PAIR_MAP_SET IsolateProtospacers::IsolateProtospacersMethod() {
             // Check for incoming external neighbor
             int indegree = graph.EdgeIndegree(v);
             if (indegree > 0) {
-            std::vector<uint64_t> incomings(indegree);
-            graph.IncomingEdges(v, incomings.data());
-            for (uint64_t neighbor : incomings) {
-                if (values.find(neighbor) == values.end()) {
-                    possibleInProtospacerNodes[k].insert(v);
-                    break;
+                std::vector<uint64_t> incomings(indegree);
+                graph.IncomingEdges(v, incomings.data());
+                for (uint64_t neighbor : incomings) {
+                    if (all_cycle_nodes.find(neighbor) == all_cycle_nodes.end()) {
+                        possibleInProtospacerNodes[k].insert(v);
+                        break;
+                    }
                 }
             }
         }
-    }
     }
 
 return {possibleOutProtospacerNodes, possibleInProtospacerNodes};
@@ -138,16 +141,7 @@ void IsolateProtospacers::PrintProtospacerNodesToConsole(const std::map<uint64_t
     }
 }
 
-// do a dls from each incoming protospacer node
-// and see if in depth of maximum depth we can reach the outgoing protospacer nodes
-std::vector<std::vector<uint64_t>> IsolateProtospacers::DepthLimitedPathsFromInToOut(
-    const std::map<uint64_t, std::set<uint64_t>>& inGroup,
-    const std::map<uint64_t, std::set<uint64_t>>& outGroup,
-    int maxDepth,
-    int minDepth
-) {
-    
-    //keep only those that share the same group
+std::pair<std::map<uint64_t, std::set<uint64_t>>, std::map<uint64_t, std::set<uint64_t>>> IsolateProtospacers::FilterSharedGroups(const std::map<uint64_t, std::set<uint64_t>>& inGroup, const std::map<uint64_t, std::set<uint64_t>>& outGroup) {
     std::map<uint64_t, std::set<uint64_t>> possibleInProtospacerNodes, possibleOutProtospacerNodes;
     for (const auto& pair : inGroup) {
         uint64_t k = pair.first;
@@ -163,36 +157,47 @@ std::vector<std::vector<uint64_t>> IsolateProtospacers::DepthLimitedPathsFromInT
             possibleOutProtospacerNodes[k] = values;
         }
     }
+    return {possibleInProtospacerNodes, possibleOutProtospacerNodes};
+}
+
+void IsolateProtospacers::DepthLimitedSearch(uint64_t currentNode, int depth, std::vector<uint64_t>& path, std::set<uint64_t>& visited, const std::set<uint64_t>& outNodes, const std::set<uint64_t>& cycleNodeSet, int maxDepth, int minDepth, std::vector<std::vector<uint64_t>>& successfulPaths) {
+    if (depth > maxDepth) return;
+    visited.insert(currentNode);
+    path.push_back(currentNode);
+
+    if (outNodes.find(currentNode) != outNodes.end() && depth >= minDepth) {
+        successfulPaths.push_back(path);
+    } else {
+        int outdegree = graph.EdgeOutdegree(currentNode);
+        if (outdegree > 0) {
+            std::vector<uint64_t> outgoings(outdegree);
+            graph.OutgoingEdges(currentNode, outgoings.data());
+            for (uint64_t neighbor : outgoings) {
+                if (visited.find(neighbor) == visited.end() && cycleNodeSet.find(neighbor) != cycleNodeSet.end()) {
+                    DepthLimitedSearch(neighbor, depth + 1, path, visited, outNodes, cycleNodeSet, maxDepth, minDepth, successfulPaths);
+                }
+            }
+        }
+    }
+
+    path.pop_back();
+    visited.erase(currentNode);
+}
+
+// do a dls from each incoming protospacer node
+std::map<uint64_t, std::vector<std::vector<uint64_t>>> IsolateProtospacers::DepthLimitedPathsFromInToOut(
+    const std::map<uint64_t, std::set<uint64_t>>& inGroup,
+    const std::map<uint64_t, std::set<uint64_t>>& outGroup,
+    int maxDepth,
+    int minDepth
+) {
+    
+    auto [possibleInProtospacerNodes, possibleOutProtospacerNodes] = FilterSharedGroups(inGroup, outGroup);
     //print first values of the maps
     std::cout << "After filtering, we have " << possibleOutProtospacerNodes.size() << " cycles with both incoming and outgoing protospacer nodes." << std::endl;
     
     
-    std::vector<std::vector<uint64_t>> successfulPaths;
-    std::function<void(uint64_t, int, std::vector<uint64_t>&, std::set<uint64_t>&, const std::set<uint64_t>&, const std::set<uint64_t>&)> dls = [&](uint64_t currentNode, int depth, std::vector<uint64_t>& path, std::set<uint64_t>& visited, const std::set<uint64_t>& outNodes, const std::set<uint64_t>& cycleNodeSet) {
-        if (depth > maxDepth) return;
-        visited.insert(currentNode);
-        path.push_back(currentNode);
-
-        if (outNodes.find(currentNode) != outNodes.end() && depth >= minDepth) {
-            successfulPaths.push_back(path);
-        } else {
-            int outdegree = graph.EdgeOutdegree(currentNode);
-            if (outdegree > 0) {
-                std::vector<uint64_t> outgoings(outdegree);
-                graph.OutgoingEdges(currentNode, outgoings.data());
-                for (uint64_t neighbor : outgoings) {
-                    if (visited.find(neighbor) == visited.end() && cycleNodeSet.find(neighbor) != cycleNodeSet.end()) {
-                        dls(neighbor, depth + 1, path, visited, outNodes, cycleNodeSet);
-                    }
-                }
-            }
-        }
-
-        path.pop_back();
-        visited.erase(currentNode);
-    };
-
-
+    std::map<uint64_t, std::vector<std::vector<uint64_t>>> cyclePaths;
     for (const auto& inPair : possibleInProtospacerNodes) {
         uint64_t cycleStartNode = inPair.first;
         const std::set<uint64_t>& inNodes = inPair.second;
@@ -213,8 +218,34 @@ std::vector<std::vector<uint64_t>> IsolateProtospacers::DepthLimitedPathsFromInT
         for (uint64_t startNode : inNodes) {
             std::vector<uint64_t> path;
             std::set<uint64_t> visited;
-            dls(startNode, 0, path, visited, outNodes, cycleNodeSet);
+            int cycleMaxDepth = maxDepth;
+            DepthLimitedSearch(startNode, 0, path, visited, outNodes, cycleNodeSet, cycleMaxDepth, minDepth, cyclePaths[cycleStartNode]);
         }
     }
-    return successfulPaths;
+    return cyclePaths;
+}
+
+void IsolateProtospacers::WritePathsToFile(const std::map<uint64_t, std::vector<std::vector<uint64_t>>>& paths, const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+
+    for (const auto& cycle_pair : paths) {
+        uint64_t cycle_id = cycle_pair.first;
+        const auto& path_list = cycle_pair.second;
+        file << "Cycle " << cycle_id << ":\n";
+        for (const auto& path : path_list) {
+            file << "[";
+            for (size_t i = 0; i < path.size(); ++i) {
+                file << path[i];
+                if (i < path.size() - 1) file << " ";
+            }
+            file << "]\n";
+        }
+        file << "\n";
+    }
+
+    file.close();
 }
