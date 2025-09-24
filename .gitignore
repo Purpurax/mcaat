@@ -11,3 +11,5 @@ CMakeCache.txt
 Makefile
 test
 test_ids
+/_build/
+/_deps/
