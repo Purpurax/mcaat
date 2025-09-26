@@ -47,6 +47,16 @@ pair<string, optional<string>> get_fastq_files_from_settings(
 );
 
 /**
+ * @brief Converts the cycles_map to a datastructure that is simpler
+ * 
+ * @param cycles_map 
+ * @return Simpler datastructure of cycles (vector<vector<uint64_t>>)
+ */
+vector<vector<uint64_t>> cycles_map_to_cycles(
+    const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
+);
+
+/**
  * @brief Get the cycle count from the special object
  * 
  * @return The cycle count (int)
@@ -65,14 +75,9 @@ void print_sdbg_graph_to_dot_file_convert(const string& lib_file_path);
 /**
  * @brief Gets the repeat and the spacers in correct order as sequences
  * 
- * 1. Find all repeat nodes by thresholding
- * 2. Align the cycles to some repeat node (most commonly appearing repeat node)
- * 3. Turn cycles into sequence
- * 4. Barrel shift until the sequence is: RRRRRSSSSS
- * 5. Find consensus repeat sequence
- * 6. Reconstruct full sequence and spacer strings
- * 
- * @post ordered_cycles will be modified internally
+ * The first node is expected to have the highest multiplicity value and will be considered as a repeat node.
+ * The repeat nodes are extended to the right and to the left until one of those nodes has a multiplicity
+ * lower than highest_multiplicity / cycle_count
  * 
  * @param sdbg The graph used for getting the sequences and the repeats
  * @param ordered_cycles The cycles in the correct order containing node ids

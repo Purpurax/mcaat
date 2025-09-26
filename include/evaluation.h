@@ -127,7 +127,7 @@ int get_number_of_duplicate_spacers(
  * @return The most similar sequence (string)
  * @return "", if choices is empty
  */
-string pop_most_similar_sequence(
+string get_most_similar_sequence(
     const string& sequence,
     vector<string>& choices
 );

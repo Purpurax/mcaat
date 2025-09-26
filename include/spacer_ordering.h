@@ -5,12 +5,12 @@
  * Contains:
  * - Graph structure for basic graph operations.
  * - Functions to extract and order cycles and regions from SDBG.
- * - Functions to get relevant jumps and cycles.
+ * - Functions to get relevant reads and cycles.
  * - Functions to combine cycles into ordered node sequences.
  *
  * Main public functions:
  * - get_crispr_regions_extended_by_k
- * - get_relevant_jumps
+ * - get_relevant_reads
  * - get_relevant_cycles
  * - order_cycles
  * - turn_cycle_order_into_node_order
@@ -23,7 +23,7 @@
 #include <algorithm>
 
 #include "sdbg/sdbg.h"
-#include "jumps.h"
+#include "reads.h"
 
 #include "core/cft.hpp"
 #include "core/Instance.hpp"
@@ -117,7 +117,7 @@ vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg);
 vector<Graph> get_crispr_regions_extended_by_k(
     SDBG& sdbg,
     const size_t& k,
-    const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles
+    const vector<vector<uint64_t>>& cycles
 );
 
 /**
@@ -133,30 +133,31 @@ vector<uint32_t> get_all_cycle_indices(
 );
 
 /**
- * @brief Get the jumps where the end- and start-kmers are part of the graphs nodes
+ * @brief Get the reads where the end- and start-kmers are part of the graphs nodes
  * 
  * @param graph The graph used to check the nodes
- * @param jumps The jumps from which the relevant ones are copied
+ * @param reads The reads from which the relevant ones are copied
  * 
- * @return The relevant jumps (vector<Jump>)
+ * @return The relevant reads (vector<vector<uint64_t>>)
  */
-vector<Jump> get_relevant_jumps(const Graph& graph, const vector<Jump>& jumps);
+vector<vector<uint64_t>> get_relevant_reads(
+    const Graph& graph,
+    const vector<vector<uint64_t>>& all_reads
+);
 
 /**
  * @brief Get the relevant cycles
  * 
  * Cycles are relevant, if they all of their nodes are part of the graph
  * 
- * @todo change parameter all_cycles_map to a more meaningful type
- * 
  * @param graph The graph used to check the nodes
- * @param all_cycles_map The cycles from which the relevant ones are copied
+ * @param all_cycles The cycles from which the relevant ones are copied
  * 
  * @return The relevant cycles (vector<vector<uint64_t>>)
  */
 vector<vector<uint64_t>> get_relevant_cycles(
     const Graph& graph,
-    const unordered_map<uint64_t, vector<vector<uint64_t>>>& all_cycles_map
+    const vector<vector<uint64_t>>& all_cycles
 );
 
 /**
@@ -228,77 +229,77 @@ vector<tuple<uint32_t, uint32_t>> every_possible_combination(const vector<uint32
 
 /**
  * @internal
- * @brief Uses a single jump to derive constraints
+ * @brief Uses a single read to derive constraints
  * 
- * Uses the information provided by the jump to derive as many constraints as possible.
+ * Uses the information provided by the read to derive as many constraints as possible.
  * 
  * **Constraint**: is composed of 2 indices, standing for cycle indices.
  * 
- * Internally it tries to reconstruct the path from the start and end node using the jump.
+ * Internally it tries to reconstruct the path from the start and end node using the read.
  * With that information specific nodes are mapped to unique cycle indices.
  * This vector of cycle indices can then be used for constraint construction,
  * as every two-value-combination of that vector is a valid constraint.
  * 
- * @param graph The graph used to find the jumps path
- * @param jump The jump for which constraints have to be found
+ * @param graph The graph used to find the reads path
+ * @param read The read for which constraints have to be found
  * @param node_to_cycle_map The map used to turn node_ids into usable cycle indices
  * 
  * @return All valid constraints (vector<tuple<uint32_t, uint32_t>>)
  */
-vector<tuple<uint32_t, uint32_t>> generate_constraints_from_jump(
+vector<tuple<uint32_t, uint32_t>> generate_constraints_from_read(
     const Graph& graph,
-    const Jump& jump,
+    const vector<uint64_t>& read,
     const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 );
 
 /**
  * @internal
- * @brief Uses a single jump to derive constraints involving nodes outside the cycles
+ * @brief Uses a single read to derive constraints involving nodes outside the cycles
  * 
  * This function creates constraints using node ids that cannot be mapped to any cycle index,
  * treating these nodes as representing the "outside" of the CRISPR array.
  * 
- * Assumes that the CRISPR array must have at least one jump entering from outside and one jump leading outside.
+ * Assumes that the CRISPR array must have at least one read entering from outside and one read leading outside.
  * Constraints are constructed to reflect transitions between the outside and the cycles.
  * 
  * **Constraint**: is composed of 2 indices, standing for cycle indices or a special value representing "outside".
  * 
- * Internally, the function reconstructs the path from the start and end node using the jump.
+ * Internally, the function reconstructs the path from the start and end node using the read.
  * Nodes that cannot be mapped to any cycle index are considered outside.
  * Constraints are generated for transitions from outside to inside and from inside to outside.
  * 
- * @param graph The graph used to find the jump's path
- * @param jump The jump for which constraints have to be found
+ * @param graph The graph used to find the read's path
+ * @param read The read for which constraints have to be found
  * @param node_to_cycle_map The map used to turn node_ids into usable cycle indices
  * 
  * @return All valid constraints involving outside nodes (vector<tuple<uint32_t, uint32_t>>)
  */
-vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
+vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_read(
     const Graph& graph,
-    const Jump& jump,
+    const vector<uint64_t>& read,
     const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 );
 
 /**
  * @internal
- * @brief Uses the jumps to derive constraints
+ * @brief Uses the reads to derive constraints
  * 
  * A Constraint is composed of 2 indices, standing for cycle indices.
- * Uses the information provided by the jumps to derive as many constraints as possible.
+ * Uses the information provided by the reads to derive as many constraints as possible.
  * Also extra constraints that use the uint32_t max as an index to indicate outside of cycles
  * 
  * For more technical information look into:
- * @see generate_constraints_from_jump
+ * @see generate_constraints_from_reads
  * 
- * @param graph The graph used to find the jumps path
- * @param jumps All jumps for which constraints shall be derived
+ * @param graph The graph used to find the reads path
+ * @param reads All reads for which constraints shall be derived
  * @param node_to_cycle_map The map used to turn node_ids into usable cycle indices
  * 
  * @return All valid constraints (vector<tuple<uint32_t, uint32_t>>)
  */
 vector<tuple<uint32_t, uint32_t>> generate_constraints(
     const Graph& graph,
-    const vector<Jump>& jumps,
+    const vector<vector<uint64_t>>& reads,
     const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 );
 
@@ -403,9 +404,9 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 );
 
 /**
- * @brief Reconstructs the order of cycles using the jumps
+ * @brief Reconstructs the order of cycles using the reads
  * 
- * Takes the jumps to derive constraints, which are used to find a total order
+ * Takes the reads to derive constraints, which are used to find a total order
  * 
  * @todo Don't use the get_all_cycle_indices, instead rely on cycles.size()
  * 
@@ -413,14 +414,14 @@ vector<uint32_t> solve_constraints_with_topological_sort(
  * @post The result is a permutation of nodes from the graph
  * 
  * @param graph 
- * @param jumps 
+ * @param reads 
  * @param cycles 
  * 
  * @return vector<uint32_t> 
  */
 vector<uint32_t> order_cycles(
     const Graph& graph,
-    const vector<Jump>& jumps,
+    const vector<vector<uint64_t>>& reads,
     const vector<vector<uint64_t>>& cycles
 );
 

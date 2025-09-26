@@ -180,50 +180,44 @@ vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
 vector<Graph> get_crispr_regions_extended_by_k(
     SDBG& sdbg,
     const size_t& k,
-    const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
+    const vector<vector<uint64_t>>& cycles
 ) {
-    vector<vector<uint64_t>> cycles;
-    for (const auto& [_start_node, cycles_of_start_node] : cycles_map) {
-        for (const auto& cycle : cycles_of_start_node) {
-            cycles.push_back(cycle);
-        }
-    }
-
     keep_crispr_regions_extended_by_k(sdbg, k, cycles);
     return divide_graph_into_subgraphs(sdbg);
 }
 
-vector<Jump> get_relevant_jumps(const Graph& graph, const vector<Jump>& all_jumps) {
-    vector<Jump> relevant_jumps;
+vector<vector<uint64_t>> get_relevant_reads(
+    const Graph& graph,
+    const vector<vector<uint64_t>>& all_reads
+) {
+    vector<vector<uint64_t>> relevant_reads;
 
-    for (const auto& jump : all_jumps) {
-        if (graph.nodes.find(jump.start_k_mer_id) != graph.nodes.end()
-        || graph.nodes.find(jump.end_k_mer_id) != graph.nodes.end()) {
-            relevant_jumps.push_back(jump);
+    for (const auto& read : all_reads) {
+        if (graph.nodes.find(read.at(0)) != graph.nodes.end()
+        || graph.nodes.find(read.at(read.size() - 1)) != graph.nodes.end()) {
+            relevant_reads.push_back(read);
         }
     }
 
-    return relevant_jumps;
+    return relevant_reads;
 }
 
 vector<vector<uint64_t>> get_relevant_cycles(
     const Graph& graph,
-    const unordered_map<uint64_t, vector<vector<uint64_t>>>& all_cycles_map
+    const vector<vector<uint64_t>>& all_cycles
 ) {
     vector<vector<uint64_t>> relevant_cycles;
 
-    for (const auto& [_, cycles] : all_cycles_map) {
-        for (const auto& cycle : cycles) {
-            bool all_nodes_in_graph = true;
-            for (uint64_t node : cycle) {
-                if (graph.nodes.find(node) == graph.nodes.end()) {
-                    all_nodes_in_graph = false;
-                    break;
-                }
+    for (const auto& cycle : all_cycles) {
+        bool all_nodes_in_graph = true;
+        for (uint64_t node : cycle) {
+            if (graph.nodes.find(node) == graph.nodes.end()) {
+                all_nodes_in_graph = false;
+                break;
             }
-            if (all_nodes_in_graph) {
-                relevant_cycles.push_back(cycle);
-            }
+        }
+        if (all_nodes_in_graph) {
+            relevant_cycles.push_back(cycle);
         }
     }
 
@@ -353,37 +347,6 @@ vector<uint32_t> get_all_cycle_indices(
     return cycle_indices;
 }
 
-vector<vector<uint64_t>> find_all_possible_paths(
-    const Graph& graph,
-    uint64_t start,
-    uint64_t end,
-    uint64_t nodes_left
-) {
-    vector<vector<uint64_t>> paths;
-
-    if (nodes_left == 0 && start == end) {
-        paths.push_back({end});
-        return paths;
-    } else if (nodes_left == 0) {
-        return paths;
-    }
-
-    if (graph.adjacency_list.find(start) == graph.adjacency_list.end()) {
-        return paths;
-    }
-
-    const auto& neighbors = graph.adjacency_list.find(start)->second;
-    for (uint64_t next_node : neighbors) {
-        auto sub_paths = find_all_possible_paths(graph, next_node, end, nodes_left - 1);
-        for (auto& sub_path : sub_paths) {
-            sub_path.insert(sub_path.begin(), start);
-            paths.push_back(sub_path);
-        }
-    }
-
-    return paths;
-}
-
 vector<tuple<uint32_t, uint32_t>> every_possible_combination(const vector<uint32_t>& v) {
     vector<tuple<uint32_t, uint32_t>> possible_combination;
     
@@ -402,201 +365,112 @@ vector<tuple<uint32_t, uint32_t>> every_possible_combination(const vector<uint32
     return possible_combination;
 }
 
-vector<tuple<uint32_t, uint32_t>> generate_constraints_from_jump(
+vector<tuple<uint32_t, uint32_t>> generate_constraints_from_read(
     const Graph& graph,
-    const Jump& jump,
+    const vector<uint64_t>& read,
     const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 ) {
-    vector<tuple<uint32_t, uint32_t>> constraints;
-
-    const vector<vector<uint64_t>> all_paths = find_all_possible_paths(
-        graph,
-        jump.start_k_mer_id,
-        jump.end_k_mer_id,
-        jump.nodes_in_between + 1 // + 1, to count the end node as well
-    );
-
-    if (all_paths.empty()) {
-        return constraints;
+    vector<uint32_t> cycle_indices_in_order;
+    for (const auto& node_id : read) {
+        const auto it = node_to_cycle_map.find(node_id);
+        if (it != node_to_cycle_map.end()) {
+            const uint32_t cycle_index = it->second;
+            cycle_indices_in_order.push_back(cycle_index);
+        }
     }
 
-    vector<uint32_t> cycle_indices_in_order;
-    // + 2 as start and end nodes are included in the path
-    for (size_t i = 0; i < static_cast<size_t>(jump.nodes_in_between) + 2; ++i) {
-        bool all_nodes_can_be_mapped = true;
-        for (const auto& path : all_paths) {
-            const uint64_t node = path[i];
-            if (node_to_cycle_map.find(node) == node_to_cycle_map.end()) {
-                all_nodes_can_be_mapped = false;
-                break;
-            }
+    // Merge common neighbors: A,A,B,C,C,C -> A,B,C
+    vector<uint32_t> cycle_indices_merged;
+    uint32_t last_cycle_index;
+    for (int i = 0; i < cycle_indices_in_order.size(); ++i) {
+        const uint32_t cycle_index = cycle_indices_in_order.at(i);
+
+        if (i == 0 || cycle_index != last_cycle_index) {
+            cycle_indices_merged.push_back(cycle_index);
+            last_cycle_index = cycle_index;
         }
-
-        if (!all_nodes_can_be_mapped) {
-            continue;
-        }
-
-        bool cycle_index_differs = false;
-        optional<uint32_t> common_cycle_index = std::nullopt;
-        for (const auto& path : all_paths) {
-            const uint64_t node = path[i];
-            const uint32_t cycle_index = node_to_cycle_map.find(node)->second;
-
-            if (common_cycle_index.has_value() && common_cycle_index.value() != cycle_index) {
-                cycle_index_differs = true;
-                break;
-            } else if (!common_cycle_index.has_value()) {
-                common_cycle_index = std::make_optional(cycle_index);
-            }
-        }
-
-        if (cycle_index_differs || !common_cycle_index.has_value()) {
-            continue;
-        }
-
-        cycle_indices_in_order.push_back(common_cycle_index.value());
     }
 
     return every_possible_combination(cycle_indices_in_order);
+
+    // vector<tuple<uint32_t, uint32_t>> derived_constraints;
+    // for (int i = 0; i < cycle_indices_merged.size() - 1; ++i) {
+    //     const uint32_t cycle_index = cycle_indices_merged.at(i);
+    //     const uint32_t cycle_index_next = cycle_indices_merged.at(i + 1);
+
+    //     derived_constraints.push_back(std::make_tuple(cycle_index, cycle_index_next));
+    // }
+
+    // return derived_constraints;
 }
 
-vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_jump(
+vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_read(
     const Graph& graph,
-    const Jump& jump,
+    const vector<uint64_t>& read,
     const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 ) {
-    vector<tuple<uint32_t, uint32_t>> constraints;
-
-    const vector<vector<uint64_t>> all_paths = find_all_possible_paths(
-        graph,
-        jump.start_k_mer_id,
-        jump.end_k_mer_id,
-        jump.nodes_in_between + 1 // + 1, to count the end node as well
-    );
-
-    if (all_paths.empty()) {
-        return constraints;
-    }
-
-    vector<uint32_t> cycle_indices_in_order;
-    // + 2 as start and end nodes are included in the path
-    for (size_t i = 0; i < static_cast<size_t>(jump.nodes_in_between) + 2; ++i) {
-        bool cycle_index_differs = false;
-        optional<uint32_t> common_cycle_index = std::nullopt;
-        for (const auto& path : all_paths) {
-            const uint64_t node = path[i];
-
-            uint32_t cycle_index;
-            auto it = node_to_cycle_map.find(node);
-            if (it != node_to_cycle_map.end()) {
-                cycle_index = it->second;
-            } else {
-                cycle_index = NOT_IN_ANY_CYCLE_INDEX;
-            }
-
-            if (common_cycle_index.has_value() && common_cycle_index.value() != cycle_index) {
-                cycle_index_differs = true;
-                break;
-            } else if (!common_cycle_index.has_value()) {
-                common_cycle_index = std::make_optional(cycle_index);
-            }
-        }
-
-        if (cycle_index_differs || !common_cycle_index.has_value()) {
-            continue;
-        }
-
-        cycle_indices_in_order.push_back(common_cycle_index.value());
-    }
-
-    if (cycle_indices_in_order.size() < 2) {
+    if (node_to_cycle_map.find(read.at(0)) == node_to_cycle_map.end()
+    || node_to_cycle_map.find(read.at(read.size() - 1)) == node_to_cycle_map.end()) {
         return {};
     }
 
-    // Be z the index for the "not being in any cycle" and X a sequence of cycle indices
-    // The following cases are possible for cycle_indices_in_order:
-    //  - z X => Indicates the indices X are close to the start, i.e. are the start
-    //  - X z => Indicates the indices X are close to the end, i.e. are the end
-    //  - z X z => Doesn't provide any value
-    //  - X z X => Doesn't provide any value
-    if (cycle_indices_in_order[0] == NOT_IN_ANY_CYCLE_INDEX
-    && cycle_indices_in_order[cycle_indices_in_order.size() - 1] != NOT_IN_ANY_CYCLE_INDEX) {
-        bool is_valid_start = true;
-        bool expecting_z = true;
-        for (const auto& cycle_index : cycle_indices_in_order) {
-            if (expecting_z && cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
-                expecting_z = false;
-            } else if (!expecting_z && cycle_index == NOT_IN_ANY_CYCLE_INDEX) {
-                is_valid_start = false;
-                break;
-            }
+    vector<uint32_t> cycle_indices_in_order;
+    for (const auto& node_id : read) {
+        const auto it = node_to_cycle_map.find(node_id);
+
+        uint32_t cycle_index;
+        if (it == node_to_cycle_map.end()) {
+            cycle_index = NOT_IN_ANY_CYCLE_INDEX;
+        } else {
+            cycle_index = it->second;
         }
 
-        if (is_valid_start) {
-            // Only getting the first constraint of cycle_indices_in_order
-            uint32_t first_other_cycle_index;
-            for (const auto& cycle_index : cycle_indices_in_order) {
-                if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
-                    first_other_cycle_index = cycle_index;
-                    break;
-                }
-            }
+        cycle_indices_in_order.push_back(cycle_index);
+    }
 
-            return {std::make_pair(NOT_IN_ANY_CYCLE_INDEX, first_other_cycle_index)};
-            // return every_possible_combination(cycle_indices_in_order);
-        }
-    } else if (cycle_indices_in_order[0] != NOT_IN_ANY_CYCLE_INDEX
-    && cycle_indices_in_order[cycle_indices_in_order.size() - 1] == NOT_IN_ANY_CYCLE_INDEX) {
-        bool is_valid_end = true;
-        bool expecting_z = false;
-        for (const auto& cycle_index : cycle_indices_in_order) {
-            if (expecting_z && cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
-                is_valid_end = false;
-                break;
-            } else if (!expecting_z && cycle_index == NOT_IN_ANY_CYCLE_INDEX) {
-                expecting_z = true;
-            }
-        }
+    // Merge common neighbors: A,A,B,C,C,C -> A,B,C
+    vector<uint32_t> cycle_indices_merged;
+    uint32_t last_cycle_index;
+    for (int i = 0; i < cycle_indices_in_order.size(); ++i) {
+        const uint32_t cycle_index = cycle_indices_in_order.at(i);
 
-        if (is_valid_end) {
-            // Only getting the constraint just before the outside
-            uint32_t first_other_cycle_index;
-            for (int i = cycle_indices_in_order.size() - 1; i >= 0; --i) {
-                uint32_t cycle_index = cycle_indices_in_order.at(i);
-                if (cycle_index != NOT_IN_ANY_CYCLE_INDEX) {
-                    first_other_cycle_index = cycle_index;
-                    break;
-                }
-            }
-
-            return {std::make_pair(first_other_cycle_index, NOT_IN_ANY_CYCLE_INDEX)};
-            // return every_possible_combination(cycle_indices_in_order);
+        if (i == 0 || cycle_index != last_cycle_index) {
+            cycle_indices_merged.push_back(cycle_index);
+            last_cycle_index = cycle_index;
         }
     }
-    
-    return {};
+
+    vector<tuple<uint32_t, uint32_t>> derived_constraints;
+    if (cycle_indices_merged.size() > 1) {
+        const uint32_t cycle_index = cycle_indices_merged.at(0);
+        const uint32_t cycle_index_next = cycle_indices_merged.at(1);
+
+        derived_constraints.push_back(std::make_tuple(cycle_index, cycle_index_next));
+    }
+
+    return derived_constraints;
 }
 
 vector<tuple<uint32_t, uint32_t>> generate_constraints(
     const Graph& graph,
-    const vector<Jump>& jumps,
+    const vector<vector<uint64_t>>& reads,
     const unordered_map<uint64_t, uint32_t>& node_to_cycle_map
 ) {
     vector<tuple<uint32_t, uint32_t>> constraints;
 
-    for (const auto& jump : jumps) {
-        const auto jump_constraints = generate_constraints_from_jump(
+    for (const auto& read : reads) {
+        const auto read_constraints = generate_constraints_from_read(
             graph,
-            jump,
+            read,
             node_to_cycle_map
         );
-        const auto extra_constraints = generate_out_of_cycles_constraints_from_jump(
+        const auto extra_constraints = generate_out_of_cycles_constraints_from_read(
             graph,
-            jump,
+            read,
             node_to_cycle_map
         );
 
-        for (const auto& constraint : jump_constraints) {
+        for (const auto& constraint : read_constraints) {
             constraints.push_back(constraint);
         }
         for (const auto& constraint : extra_constraints) {
@@ -867,12 +741,12 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 
 vector<uint32_t> order_cycles(
     const Graph& graph,
-    const vector<Jump>& jumps,
+    const vector<vector<uint64_t>>& reads,
     const vector<vector<uint64_t>>& cycles
 ) {
     const auto node_to_cycle_map = get_node_to_unique_cycle_map(cycles);
     const auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
-    auto constraints = generate_constraints(graph, jumps, node_to_cycle_map);
+    auto constraints = generate_constraints(graph, reads, node_to_cycle_map);
 
     std::cout << "      ▸ " << constraints.size() << " constraints derived" << std::endl;
 

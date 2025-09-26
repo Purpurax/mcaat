@@ -23,7 +23,7 @@
 
 #include "cycle_finder.h"
 #include "filters.h"
-#include "jumps.h"
+#include "reads.h"
 #include "post_processing.h"
 #include "sdbg/sdbg.h"
 #include "sdbg_build.h"
@@ -467,6 +467,8 @@ int main(int argc, char** argv) {
     auto cycles_map = cycle_finder.results;
     cout << "Number of nodes in results: " << cycles_map.size() << endl;
     // %% FBCE ALGORITHM %%
+
+    auto cycles = cycles_map_to_cycles(cycles_map);
     
     // // %% FILTER CYCLES %%
     // cout << "FILTER CYCLES START:" << endl;
@@ -481,20 +483,18 @@ int main(int argc, char** argv) {
     std::chrono::_V2::system_clock::time_point end_time;
 
     cout << "\n══════════════════════════════════════════════" << endl;
-    cout << "🔸STEP 6: Creating the jumps" << endl;
+    cout << "🔸STEP 6: Finding relevant reads" << endl;
     cout << "══════════════════════════════════════════════" << endl;
     start_time = std::chrono::high_resolution_clock::now();
 
     auto fastq_files = get_fastq_files_from_settings(settings);
-    size_t biggest_jump_size = 0;
-    auto jumps = get_jumps_from_reads(
+    auto reads = get_reads(
         sdbg,
         fastq_files.first,
         fastq_files.second,
-        settings.threads,
-        biggest_jump_size
+        cycles
     );
-    cout << "    ▸ Created " << jumps.size() << " jumps" << endl;
+    cout << "    ▸ Found " << reads.size() << " reads" << endl;
 
     end_time = std::chrono::high_resolution_clock::now();
     cout << "\n⏳ Time elapsed: ";
@@ -509,30 +509,31 @@ int main(int argc, char** argv) {
 
     
     cout << "  ▸ Splitting into subproblems" << endl;
-    auto subgraphs = get_crispr_regions_extended_by_k(sdbg, biggest_jump_size, cycles_map);
+    const size_t reads_size = reads.at(0).size();
+    auto subgraphs = get_crispr_regions_extended_by_k(sdbg, reads_size, cycles);
 
     cout << "  🔄 Filtering subproblems:" << endl;
     vector<Graph> remaining_subgraphs;
-    vector<vector<Jump>> remaining_jumps;
+    vector<vector<vector<uint64_t>>> remaining_reads;
     vector<vector<vector<size_t>>> remaining_cycles;
     for (size_t idx = 0; idx < subgraphs.size(); ++idx) {
         const auto& subgraph = subgraphs[idx];
-        const auto relevant_jumps = get_relevant_jumps(subgraph, jumps);
-        auto relevant_cycles = get_relevant_cycles(subgraph, cycles_map);
+        const auto relevant_reads = get_relevant_reads(subgraph, reads);
+        auto relevant_cycles = get_relevant_cycles(subgraph, cycles);
 
         get_minimum_cycles_for_full_coverage(relevant_cycles);
         
         // The assembly of megahit always assembles the graph in its reverse complement.
-        // We discard the reverse complement by assuming that it won't have any relevant jumps
-        if (relevant_jumps.size() == 0 || relevant_cycles.size() < 3) {
+        // We discard the reverse complement by assuming that it won't have any relevant reads
+        if (relevant_reads.size() == 0 || relevant_cycles.size() < 3) {
             continue;
         }
 
         remaining_subgraphs.push_back(subgraph);
-        remaining_jumps.push_back(relevant_jumps);
+        remaining_reads.push_back(relevant_reads);
         remaining_cycles.push_back(relevant_cycles);
     }
-    cout << "  ✅ Filtered out " << subgraphs.size()-remaining_subgraphs.size();
+    cout << "  ✅ Filtered out " << subgraphs.size() - remaining_subgraphs.size();
     cout << "/" << subgraphs.size() << " subproblems" << endl;
 
     
@@ -541,7 +542,7 @@ int main(int argc, char** argv) {
     vector<tuple<string, string, vector<string>>> found_systems;
     for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
         const auto& subgraph = remaining_subgraphs[idx];
-        const auto& relevant_jumps = remaining_jumps[idx];
+        const auto& relevant_reads = remaining_reads[idx];
         const auto& relevant_cycles = remaining_cycles[idx];
         
         cout << "    Subproblem " << idx + 1 << "/";
@@ -550,13 +551,13 @@ int main(int argc, char** argv) {
         cout << "      🛈 Graph with " << subgraph.nodes.size();
         cout << " nodes and " << subgraph.edge_count() << " edges" << endl;
 
-        cout << "      🛈 Jumps with " << relevant_jumps.size() << "/";
-        cout << jumps.size() << " used" << endl;
+        cout << "      🛈 Reads with " << relevant_reads.size() << "/";
+        cout << reads.size() << " used" << endl;
 
         cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
         cout << get_cycle_count(cycles_map) << " used" << endl;
 
-        auto cycle_order = order_cycles(subgraph, relevant_jumps, relevant_cycles);
+        auto cycle_order = order_cycles(subgraph, relevant_reads, relevant_cycles);
 
         cout << "      ▸ The order is ";
         for (auto node : cycle_order) {
@@ -617,7 +618,7 @@ int main(int argc, char** argv) {
         float average_sequence_similarity = 0.0;
         for (const auto& [sequence, repeat, spacers] : found_systems) {
             // This leads to overestimation by choosing greedy
-            const auto expected_sequence = pop_most_similar_sequence(
+            const auto expected_sequence = get_most_similar_sequence(
                 sequence, benchmark_sequences
             );
             if (expected_sequence == "") {

@@ -154,7 +154,7 @@ int get_number_of_duplicate_spacers(
     return result;
 }
 
-string pop_most_similar_sequence(
+string get_most_similar_sequence(
     const string& sequence,
     vector<string>& choices
 ) {
@@ -176,6 +176,6 @@ string pop_most_similar_sequence(
         }
     }
 
-    choices.erase(choices.begin() + best_idx);
+    // choices.erase(choices.begin() + best_idx);
     return result_sequence;
 }
