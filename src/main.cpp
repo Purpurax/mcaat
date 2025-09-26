@@ -25,7 +25,7 @@
 #elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #endif
-#ifdef DEVELOP
+#ifdef DEBUG
 #include "io_ops.h"
 #endif
 using namespace std;
@@ -233,6 +233,19 @@ string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
     return label;
 }
 
+int64_t findNodeFromKmer(SDBG& sdbg, const std::string& kmer) {
+    int k = sdbg.k();
+    if (kmer.size() != k) {
+        std::cerr << "Warning: kmer size " << kmer.size() << " does not match k=" << k << std::endl;
+        return -1; // or handle error
+    }
+    std::vector<uint8_t> seq(k);
+    for (int i = 0; i < k; ++i) {
+        seq[i] = "ACGT"s.find(kmer[i]) + 1;
+    }
+    return sdbg.IndexBinarySearch(seq.data());
+}
+
 #ifdef DEBUG
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
@@ -274,21 +287,26 @@ int main(int argc, char** argv) {
     // %% LOAD GRAPH %%
     
     delete[] cstr;
-
-        
-    string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
-    uint8_t end_seq[24];
-    for (int i = 0; i < 23; ++i) {
-        end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
+    string ending_seq = "CAGAGATAGAAATTATTTTTATTATACGTTTTTTTGT";
+    vector<int64_t> end_nodes;
+    //using findNodeFromKmer find all the node ids in the ending_seq
+    for (size_t i = 0; i <= ending_seq.size() - sdbg.k(); ++i) {
+        string kmer = ending_seq.substr(i, sdbg.k());
+        int64_t node = findNodeFromKmer(sdbg, kmer);
+        if (node != -1) {
+            end_nodes.push_back(node);
+        }
     }
-    int64_t end_node = sdbg.IndexBinarySearch(end_seq);
-    cout<<"EdgeMultiplicity: "<<sdbg.EdgeMultiplicity(end_node)<<endl;
-    cout<<"Indegree: "<<sdbg.EdgeIndegree(end_node)<<endl;
-    cout<<"Outdegree: "<<sdbg.EdgeOutdegree(end_node)<<endl;
+    //print all the end nodes
+    cout << "End nodes: ";
+    for (const auto& node : end_nodes) {
+        cout << node << " ";
+    }
+    cout << endl;
+
     // %% LOAD GRAPH %%
-    cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
     PhageCurator phage_curator(sdbg);
-    std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_node, 1000,5000);
+    std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_nodes[0], 1000,5000);
     phage_curator.ReconstructPaths(paths);
     for(const auto& sequence : phage_curator.reconstructed_sequences) {
         std::cout << sequence << std::endl;
@@ -315,19 +333,111 @@ int main(int argc, char** argv) {
     CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
+    auto systems_from_analyzer = analyzer.getSystems();
+    
+    // Create map: key is node from first kmer of repeat, value is vectors of nodes from kmers of each spacer
+    std::map<uint64_t, std::vector<std::vector<uint64_t>>> repeat_to_spacer_nodes;
+    int k = sdbg.k();
+    for (const auto& [repeat, spacers] : systems_from_analyzer) {
+        if (repeat.size() < k) continue;
+        std::string first_kmer = repeat.substr(0, k);
+        uint64_t key_node = findNodeFromKmer(sdbg, first_kmer);
+        if (key_node == -1) continue; // invalid
+        std::vector<std::vector<uint64_t>> spacer_node_vectors;
+        for (const auto& spacer : spacers) {
+            std::vector<uint64_t> nodes;
+            int L = spacer.size();
+            for (int i = 0; i <= L - k; ++i) {
+                std::string kmer = spacer.substr(i, k);
+                uint64_t node = findNodeFromKmer(sdbg, kmer);
+                if (node != -1) {
+                    nodes.push_back(node);
+                }
+            }
+            if (!nodes.empty()) {
+                spacer_node_vectors.push_back(std::move(nodes));
+            }
+        }
+        if (!spacer_node_vectors.empty()) {
+            repeat_to_spacer_nodes[key_node] = std::move(spacer_node_vectors);
+        }
+    }
+    cout << "Created repeat_to_spacer_nodes map with " << repeat_to_spacer_nodes.size() << " entries." << endl;
+    
     //%% POST PROCESSING %%
     //call cycle reader
-    string cycles_file_path = settings.cycles_folder + "/labels.txt";
-    IsolateProtospacers isolator(sdbg, cycles_file_path);
+    //string cycles_file_path = settings.cycles_folder + "/labels.txt";
+    IsolateProtospacers isolator(sdbg, repeat_to_spacer_nodes);
     pair<std::map<uint64_t,std::set<uint64_t>>,std::map<uint64_t,std::set<uint64_t>>> protospacer_nodes = isolator.getProtospacerNodes();
-    auto paths_protospacers = isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.second, protospacer_nodes.first, 50, 23);
-    cout << "Number of paths from incoming to outgoing protospacer nodes: " << paths_protospacers.size() << endl;
-    /*for (const auto& path : paths_protospacers) {
-        cout << "[";
-        for (uint64_t node : path) {
-            cout << "(" << node << ":"<<sdbg.EdgeMultiplicity(node) <<")"<<" ";
+    auto grouped_paths_protospacers = isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.first, protospacer_nodes.second, 50,1);
+    //print all the grouped paths protospacers into file
+    ofstream output_file("grouped_paths_protospacers.txt");
+    if (!output_file.is_open()) {
+        cerr << "Failed to open output file for grouped paths." << endl;
+        return 1;
+    }
+    int in_counter = 0;
+    for (const auto& group_paths : grouped_paths_protospacers) {
+        uint64_t group_id = group_paths.first;
+        const auto& cycle_map = group_paths.second;
+        output_file << "Group " << group_id << ":\n";
+        for (const auto& cycle_paths : cycle_map) {
+            uint64_t cycle_id = cycle_paths.first;
+            const auto& paths = cycle_paths.second;
+            if (!paths.empty()) {
+                output_file << "  Cycle " << cycle_id << ":\n";
+                
+                for (const auto& path : paths) {
+                    in_counter += 1;
+                    output_file << in_counter << "    [";
+                    for (uint64_t node : path) {
+                        
+                        output_file << node << " ";
+                    }
+                    output_file << "]\n";
+                }
+            }
         }
-        cout << "]" << endl;
+    }
+    output_file.close();
+    // print the number of groups
+    cout << "Number of groups of paths from incoming to outgoing protospacer nodes: " << grouped_paths_protospacers.size() << endl;
+    int total_paths = 0;
+    int total_cycles_with_paths = 0;
+    
+    //print number of paths per group
+    for (const auto& group_paths : grouped_paths_protospacers) {
+        uint64_t group_id = group_paths.first;
+        const auto& cycle_map = group_paths.second;
+        cout << "Group " << group_id << ": " << endl;
+        for (const auto& cycle_paths : cycle_map) {
+            uint64_t cycle_id = cycle_paths.first;
+            const auto& paths = cycle_paths.second;
+            if (!paths.empty()) {
+                total_cycles_with_paths++;
+                total_paths += paths.size();
+                
+                cout << "  Cycle " << cycle_id << ": " << paths.size() << " paths of sizes: ";
+                for (const auto& path : paths) {
+                    cout << path.size() << " ";
+                }
+                cout << endl;
+            }
+        }
+    }
+    cout << "Total cycles with paths: " << total_cycles_with_paths << endl;
+    
+    cout << "Number of paths from incoming to outgoing protospacer nodes: " << total_paths << endl;
+    //io_ops::write_nodes_gfa("output.gfa", sdbg);
+    /*for (const auto& cycle_paths : grouped_paths_protospacers) {
+        cout << "Cycle " << cycle_paths.first << ":" << endl;
+        for (const auto& path : cycle_paths.second) {
+            cout << "[";
+            for (uint64_t node : path) {
+                cout << "(" << node << ":"<<sdbg.EdgeMultiplicity(node) <<")"<<" ";
+            }
+            cout << "]" << endl;
+        }
     }*/
     //isolator.PrintProtospacerNodesToConsole(protospacer_nodes.first, "outgoing");
     //isolator.PrintProtospacerNodesToConsole(protospacer_nodes.second, "incoming");

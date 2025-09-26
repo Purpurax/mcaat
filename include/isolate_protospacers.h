@@ -18,6 +18,7 @@ class IsolateProtospacers {
 private:
     const SDBG& graph;
     std::map<uint64_t, std::set<uint64_t>> cycleNodes;
+    std::map<uint64_t, uint64_t> cycleToGroup;
     IN_OUT_PAIR_MAP_SET protospacerNodes;
 
     std::pair<std::map<uint64_t, std::set<uint64_t>>, std::map<uint64_t, std::set<uint64_t>>> FilterSharedGroups(const std::map<uint64_t, std::set<uint64_t>>& inGroup, const std::map<uint64_t, std::set<uint64_t>>& outGroup);
@@ -34,14 +35,14 @@ public:
 
     void PrintProtospacerNodesToConsole(const std::map<uint64_t, std::set<uint64_t>>& possibleProtospacerNodes, const std::string& type_edge);
 
-    std::map<uint64_t, std::vector<std::vector<uint64_t>>> DepthLimitedPathsFromInToOut(
+    std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>> DepthLimitedPathsFromInToOut(
         const std::map<uint64_t, std::set<uint64_t>>& inGroup,
         const std::map<uint64_t, std::set<uint64_t>>& outGroup,
         int maxDepth,
         int minDepth
     );
 
-    void WritePathsToFile(const std::map<uint64_t, std::vector<std::vector<uint64_t>>>& paths, const std::string& filename);
+    void WritePathsToFile(const std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>>& paths, const std::string& filename);
 
     // Getters
     const IN_OUT_PAIR_MAP_SET& getProtospacerNodes() const { return protospacerNodes; }
