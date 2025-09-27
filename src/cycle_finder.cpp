@@ -214,19 +214,10 @@ vector<vector<uint64_t>> CycleFinder::FindCycle(uint64_t start_node, vector<uint
     
     #pragma omp critical
     {
-        for (const auto& cycle : cycles) {
-            #ifdef DEBUG
-            PathWriter path_writer("a", this->sdbg, cycle, this->genome_name, "cycle");
-            #endif
+        for (const auto& cycle : cycles) 
             for (const auto& node : cycle) 
-            {
                 this->visited[node] = true;
-                
-            }
-        }
     }
-    
-    
     
     return cycles;
 }
@@ -318,19 +309,33 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
         // Process all neighbors to maintain correctness (removed faulty simple path optimization)
         // Process neighbors in forward order (SIMD-friendly pattern from megahit)
         // Unroll loop for small outdegrees to reduce overhead
-        // Unrolled loop for common case (de Bruijn graph max degree = 4)
-        for (int i = 0; i < outdegree; ++i) {
-            uint64_t neighbor = neighbors[i];
-            auto visited_it = dls_visited.find(neighbor);
-            bool not_visited = (visited_it == dls_visited.end());
-            bool is_start_revisit = (neighbor == start_node && depth > 0);
+        if (__builtin_expect(outdegree <= 4, 1)) {
+            // Unrolled loop for common case (de Bruijn graph max degree = 4)
+            for (int i = 0; i < outdegree; ++i) {
+                uint64_t neighbor = neighbors[i];
+                auto visited_it = dls_visited.find(neighbor);
+                bool not_visited = (visited_it == dls_visited.end());
+                bool is_start_revisit = (neighbor == start_node && depth > 0);
                 
-            if (__builtin_expect(not_visited || is_start_revisit, 1)) {
-                dls_visited.insert(neighbor);
-                dls_stack.push_back({neighbor, depth + 1});
+                if (__builtin_expect(not_visited || is_start_revisit, 1)) {
+                    dls_visited.insert(neighbor);
+                    dls_stack.push_back({neighbor, depth + 1});
+                }
+            }
+        } else {
+            // Fallback for rare cases with higher degree
+            for (int i = 0; i < outdegree; ++i) {
+                uint64_t neighbor = neighbors[i];
+                auto visited_it = dls_visited.find(neighbor);
+                bool not_visited = (visited_it == dls_visited.end());
+                bool is_start_revisit = (neighbor == start_node && depth > 0);
+                
+                if (not_visited || is_start_revisit) {
+                    dls_visited.insert(neighbor);
+                    dls_stack.push_back({neighbor, depth + 1});
+                }
             }
         }
-        
 
         // Megahit-style aggressive early cycle detection
         if (__builtin_expect(v == target_node && depth > 1, 0)) {
@@ -414,23 +419,12 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
     return sum_of_all_quantities_in_all_chunks;
 }
 
-string CycleFinder::CreateFolder() {
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S") << "_" << std::setfill('0') << std::setw(3) << ms.count();
-    std::string folder_name = ss.str();
-    std::filesystem::create_directory(folder_name);
-    return folder_name;
-}
 
 /**
  * @brief Finds all cycles in the graph by iterating over chunked start nodes and utilizing parallel processing.
  */
 int CycleFinder::FindApproximateCRISPRArrays()
- {  
-    
+ {
     /*
     vector<uint64_t> tips = this->CollectTips();
     std::cout<<"BEFORE number of nodes: " << this->sdbg.size() << endl;

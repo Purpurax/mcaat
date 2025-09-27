@@ -13,7 +13,8 @@ void graph_generic_func::_GetOutgoings(uint64_t node, std::unordered_set<uint64_
     int flag = sdbg.OutgoingEdges(node, outgoings.data());
     if (flag != -1)
         for (const auto& outgoing : outgoings)
-            if(sdbg.EdgeMultiplicity(outgoing) >= sdbg.EdgeMultiplicity(node)/2) 
+            if(sdbg.EdgeMultiplicity(outgoing) >= sdbg.EdgeMultiplicity(node)/2 ||
+                sdbg.EdgeMultiplicity(outgoing) <= sdbg.EdgeMultiplicity(node)*1.2)
                 // filter out edges with higher variability
                 outgoings_set.insert(outgoing);
 }
@@ -27,7 +28,8 @@ void graph_generic_func::_GetIncomings(uint64_t node, std::unordered_set<uint64_
     int flag = sdbg.IncomingEdges(node, incomings.data());
     if (flag != -1)
         for (const auto& incoming : incomings)
-            if(sdbg.EdgeMultiplicity(incoming) >= sdbg.EdgeMultiplicity(node)/2) 
+            if(sdbg.EdgeMultiplicity(incoming) >= sdbg.EdgeMultiplicity(node)/2 ||
+                sdbg.EdgeMultiplicity(incoming) <= sdbg.EdgeMultiplicity(node)*1.2)
                 // filter out edges with higher variability
                 incomings_set.insert(incoming);
             

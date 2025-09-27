@@ -30,7 +30,11 @@
 #endif
 using namespace std;
 namespace fs = std::filesystem;
-
+#ifdef DEBUG
+#pragma message("DEBUG is defined")
+#else
+#pragma message("DEBUG is NOT defined")
+#endif
 void print_usage(const char* program_name) {
     cout << "-------------------------------------------------------" << endl;
     cout << "\n";
@@ -149,11 +153,7 @@ Settings parse_arguments(int argc, char* argv[]) {
             }
         } else if (arg == "--threads") {
             if (++i < argc) {
-                #ifdef DEBUG
-                settings.threads = 2;
-                #else
                 settings.threads = stoul(argv[i]);
-                #endif
                 
             } else {
                 throw runtime_error("Error: Missing value for --threads");
@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
     SDBG sdbg;
     vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-27_09-53-11/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
     string graph_folder_old = settings.graph_folder;///vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46
-    settings.graph_folder=folders[0];
+    settings.graph_folder=folders[1];
     char * cstr = new char [settings.graph_folder.length()+1];
     std::strcpy (cstr, settings.graph_folder.c_str());
     cout << "Graph folder: " << cstr << endl;
