@@ -311,17 +311,19 @@ void IsolateProtospacers::WritePathsToFile(const std::map<uint64_t, std::map<uin
         return;
     }
 
-    for (const auto& group_pair : paths) {
-        uint64_t group_id = group_pair.first;
-        const auto& cycle_map = group_pair.second;
+    int in_counter = 0;
+    for (const auto& group_paths : paths) {
+        uint64_t group_id = group_paths.first;
+        const auto& cycle_map = group_paths.second;
         file << "Group " << group_id << ":\n";
-        for (const auto& cycle_pair : cycle_map) {
-            uint64_t cycle_id = cycle_pair.first;
-            const auto& path_list = cycle_pair.second;
+        for (const auto& cycle_paths : cycle_map) {
+            uint64_t cycle_id = cycle_paths.first;
+            const auto& path_list = cycle_paths.second;
             if (!path_list.empty()) {
                 file << "  Cycle " << cycle_id << ":\n";
                 for (const auto& path : path_list) {
-                    file << "    [";
+                    in_counter += 1;
+                    file << in_counter << "    [";
                     for (size_t i = 0; i < path.size(); ++i) {
                         file << path[i];
                         if (i < path.size() - 1) file << " ";
@@ -330,7 +332,6 @@ void IsolateProtospacers::WritePathsToFile(const std::map<uint64_t, std::map<uin
                 }
             }
         }
-        file << "\n";
     }
 
     file.close();

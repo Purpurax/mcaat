@@ -224,28 +224,59 @@ Settings parse_arguments(int argc, char* argv[]) {
     return settings;
 }
 
+
 string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
     std::string label;            
     uint8_t seq[sdbg.k()];
-    uint32_t t = sdbg.GetLabel(node, seq);
+    sdbg.GetLabel(node, seq);
     for (int i = sdbg.k() - 1; i >= 0; --i) label.append(1, "ACGT"[seq[i] - 1]);
     reverse(label.begin(), label.end());
     return label;
 }
 
-int64_t findNodeFromKmer(SDBG& sdbg, const std::string& kmer) {
+uint64_t findNodeFromKmer(const SDBG& sdbg, const std::string& kmer) {
     int k = sdbg.k();
-    if (kmer.size() != k) {
+    if (static_cast<int>(kmer.size()) != k) {
         std::cerr << "Warning: kmer size " << kmer.size() << " does not match k=" << k << std::endl;
-        return -1; // or handle error
+        return UINT64_MAX; // or handle error
     }
     std::vector<uint8_t> seq(k);
     for (int i = 0; i < k; ++i) {
         seq[i] = "ACGT"s.find(kmer[i]) + 1;
     }
-    return sdbg.IndexBinarySearch(seq.data());
+    int64_t result = sdbg.IndexBinarySearch(seq.data());
+    return (result == -1) ? UINT64_MAX : static_cast<uint64_t>(result);
 }
 
+std::map<uint64_t, std::vector<std::vector<uint64_t>>> createRepeatToSpacerNodes(const SDBG& sdbg, const std::map<std::string, std::vector<std::string>>& systems_from_analyzer) {
+    std::map<uint64_t, std::vector<std::vector<uint64_t>>> repeat_to_spacer_nodes;
+    int k = sdbg.k();
+    for (const auto& [repeat, spacers] : systems_from_analyzer) {
+        if (static_cast<int>(repeat.size()) < k) continue;
+        std::string first_kmer = repeat.substr(0, k);
+        uint64_t key_node = findNodeFromKmer(sdbg, first_kmer);
+        if (key_node == UINT64_MAX) continue; // invalid
+        std::vector<std::vector<uint64_t>> spacer_node_vectors;
+        for (const auto& spacer : spacers) {
+            std::vector<uint64_t> nodes;
+            int L = spacer.size();
+            for (int i = 0; i <= L - k; ++i) {
+                std::string kmer = spacer.substr(i, k);
+                uint64_t node = findNodeFromKmer(sdbg, kmer);
+                if (node != UINT64_MAX) {
+                    nodes.push_back(node);
+                }
+            }
+            if (!nodes.empty()) {
+                spacer_node_vectors.push_back(std::move(nodes));
+            }
+        }
+        if (!spacer_node_vectors.empty()) {
+            repeat_to_spacer_nodes[key_node] = std::move(spacer_node_vectors);
+        }
+    }
+    return repeat_to_spacer_nodes;
+}
 #ifdef DEBUG
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
@@ -292,8 +323,8 @@ int main(int argc, char** argv) {
     //using findNodeFromKmer find all the node ids in the ending_seq
     for (size_t i = 0; i <= ending_seq.size() - sdbg.k(); ++i) {
         string kmer = ending_seq.substr(i, sdbg.k());
-        int64_t node = findNodeFromKmer(sdbg, kmer);
-        if (node != -1) {
+        uint64_t node = findNodeFromKmer(sdbg, kmer);
+        if (node != UINT64_MAX) {
             end_nodes.push_back(node);
         }
     }
@@ -304,13 +335,7 @@ int main(int argc, char** argv) {
     }
     cout << endl;
 
-    // %% LOAD GRAPH %%
-    PhageCurator phage_curator(sdbg);
-    std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_nodes[0], 1000,5000);
-    phage_curator.ReconstructPaths(paths);
-    for(const auto& sequence : phage_curator.reconstructed_sequences) {
-        std::cout << sequence << std::endl;
-    }
+
 
     // %% FBCE ALGORITHM %%
     cout << "FBCE FROM DEBUG START:" << endl;
@@ -322,131 +347,45 @@ int main(int argc, char** argv) {
     // %% FBCE ALGORITHM %%
     
     int number_of_spacers = 0;
+    
     // %% FILTERS %%
     cout << "FILTERS START:" << endl;
     Filters filters(sdbg, cycles);
     auto  SYSTEMS = filters.ListArrays(number_of_spacers);
     cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
     // %% FILTERS %%
+
     //%% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
     CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
     auto systems_from_analyzer = analyzer.getSystems();
-    
-    // Create map: key is node from first kmer of repeat, value is vectors of nodes from kmers of each spacer
-    std::map<uint64_t, std::vector<std::vector<uint64_t>>> repeat_to_spacer_nodes;
-    int k = sdbg.k();
-    for (const auto& [repeat, spacers] : systems_from_analyzer) {
-        if (repeat.size() < k) continue;
-        std::string first_kmer = repeat.substr(0, k);
-        uint64_t key_node = findNodeFromKmer(sdbg, first_kmer);
-        if (key_node == -1) continue; // invalid
-        std::vector<std::vector<uint64_t>> spacer_node_vectors;
-        for (const auto& spacer : spacers) {
-            std::vector<uint64_t> nodes;
-            int L = spacer.size();
-            for (int i = 0; i <= L - k; ++i) {
-                std::string kmer = spacer.substr(i, k);
-                uint64_t node = findNodeFromKmer(sdbg, kmer);
-                if (node != -1) {
-                    nodes.push_back(node);
-                }
-            }
-            if (!nodes.empty()) {
-                spacer_node_vectors.push_back(std::move(nodes));
-            }
-        }
-        if (!spacer_node_vectors.empty()) {
-            repeat_to_spacer_nodes[key_node] = std::move(spacer_node_vectors);
-        }
-    }
+    auto repeat_to_spacer_nodes = createRepeatToSpacerNodes(sdbg, systems_from_analyzer);
     cout << "Created repeat_to_spacer_nodes map with " << repeat_to_spacer_nodes.size() << " entries." << endl;
-    
     //%% POST PROCESSING %%
-    //call cycle reader
-    //string cycles_file_path = settings.cycles_folder + "/labels.txt";
+
+    //%% PROTOSPACER ISOLATION %%
     IsolateProtospacers isolator(sdbg, repeat_to_spacer_nodes);
     pair<std::map<uint64_t,std::set<uint64_t>>,std::map<uint64_t,std::set<uint64_t>>> protospacer_nodes = isolator.getProtospacerNodes();
     auto grouped_paths_protospacers = isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.first, protospacer_nodes.second, 50,1);
-    //print all the grouped paths protospacers into file
-    ofstream output_file("grouped_paths_protospacers.txt");
-    if (!output_file.is_open()) {
-        cerr << "Failed to open output file for grouped paths." << endl;
-        return 1;
-    }
-    int in_counter = 0;
-    for (const auto& group_paths : grouped_paths_protospacers) {
-        uint64_t group_id = group_paths.first;
-        const auto& cycle_map = group_paths.second;
-        output_file << "Group " << group_id << ":\n";
-        for (const auto& cycle_paths : cycle_map) {
-            uint64_t cycle_id = cycle_paths.first;
-            const auto& paths = cycle_paths.second;
-            if (!paths.empty()) {
-                output_file << "  Cycle " << cycle_id << ":\n";
-                
-                for (const auto& path : paths) {
-                    in_counter += 1;
-                    output_file << in_counter << "    [";
-                    for (uint64_t node : path) {
-                        
-                        output_file << node << " ";
-                    }
-                    output_file << "]\n";
-                }
-            }
-        }
-    }
-    output_file.close();
-    // print the number of groups
-    cout << "Number of groups of paths from incoming to outgoing protospacer nodes: " << grouped_paths_protospacers.size() << endl;
-    int total_paths = 0;
-    int total_cycles_with_paths = 0;
+    isolator.WritePathsToFile(grouped_paths_protospacers, "grouped_paths_protospacers.txt");
     
-    //print number of paths per group
-    for (const auto& group_paths : grouped_paths_protospacers) {
-        uint64_t group_id = group_paths.first;
-        const auto& cycle_map = group_paths.second;
-        cout << "Group " << group_id << ": " << endl;
-        for (const auto& cycle_paths : cycle_map) {
-            uint64_t cycle_id = cycle_paths.first;
-            const auto& paths = cycle_paths.second;
-            if (!paths.empty()) {
-                total_cycles_with_paths++;
-                total_paths += paths.size();
-                
-                cout << "  Cycle " << cycle_id << ": " << paths.size() << " paths of sizes: ";
-                for (const auto& path : paths) {
-                    cout << path.size() << " ";
-                }
-                cout << endl;
-            }
-        }
-    }
-    cout << "Total cycles with paths: " << total_cycles_with_paths << endl;
-    
-    cout << "Number of paths from incoming to outgoing protospacer nodes: " << total_paths << endl;
+    //%% PROTOSPACER ISOLATION %%
+    PhageCurator phage_curator(sdbg, grouped_paths_protospacers, cycles);
+    auto extended_paths = phage_curator.ExtendFromGroupedPaths(1000, 5000);
+    phage_curator.ReconstructPaths(extended_paths);
+    phage_curator.WriteSequencesToFasta("PhageCurator.txt");    
     //io_ops::write_nodes_gfa("output.gfa", sdbg);
-    /*for (const auto& cycle_paths : grouped_paths_protospacers) {
-        cout << "Cycle " << cycle_paths.first << ":" << endl;
-        for (const auto& path : cycle_paths.second) {
-            cout << "[";
-            for (uint64_t node : path) {
-                cout << "(" << node << ":"<<sdbg.EdgeMultiplicity(node) <<")"<<" ";
-            }
-            cout << "]" << endl;
-        }
-    }*/
-    //isolator.PrintProtospacerNodesToConsole(protospacer_nodes.first, "outgoing");
-    //isolator.PrintProtospacerNodesToConsole(protospacer_nodes.second, "incoming");
+    
+
     //%% POST PROCESSING %%
     // %% DELETE THE GRAPH FOLDER %%
     //fs::remove_all(graph_folder_old);
     // %% DELETE THE GRAPH FOLDER %%          
     
 }
+
 
 #else
 int main(int argc, char** argv) {
