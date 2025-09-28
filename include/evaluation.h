@@ -129,7 +129,7 @@ int get_number_of_duplicate_spacers(
  */
 string get_most_similar_sequence(
     const string& sequence,
-    vector<string>& choices
+    const vector<string>& choices
 );
 
 #endif

@@ -271,8 +271,9 @@ tuple<string, vector<string>, string> get_systems(
             prev_bp.insert(label.at(0));
         }
 
+        const bool over_first_k_mer = i > sdbg.k() - extension_to_right;
         const bool bp_branched_off = prev_bp.size() > 1;
-        if (bp_branched_off) {
+        if (over_first_k_mer && bp_branched_off) {
             unordered_set<char> prev_prev_bp;
             for (const auto& cycle: ordered_cycles) {
                 const uint64_t current_node = cycle.at(cycle.size() - i - 2);
@@ -380,12 +381,14 @@ uint16_t get_levenshtein_distance(const string& s1, const string& s2) {
                 min = dist.at(y - 1).at(x - 1) + 1;
             }
 
-            if (min > dist.at(y).at(x - 1) + 1) { // insert(s1_char)
-                min = dist.at(y).at(x - 1) + 1;
+            uint16_t insert_cost = dist.at(y).at(x - 1) + 1;
+            if (min > insert_cost) { // insert(s1_char)
+                min = insert_cost;
             }
 
-            if (min > dist.at(y - 1).at(x) + 1) { // delete()
-                min = dist.at(y - 1).at(x) + 1;
+            uint16_t delete_cost = dist.at(y - 1).at(x) + 1;
+            if (min > delete_cost) { // delete()
+                min = delete_cost;
             }
 
             dist.at(y).push_back(min);
