@@ -10,6 +10,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "settings.h"
+#include "filters.h"
+#include <cstring>
+#include "sdbg_build.h"
+#include "post_processing.h"
+#include <cctype>
+#include <unordered_map>
+#include "phage_curator.h"
+#include "isolate_protospacers.h"
 #ifdef __linux__
 #include <sys/sysinfo.h>
 #elif defined(_WIN32)
@@ -17,7 +26,7 @@
 #elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #endif
-#ifdef DEVELOP
+#ifdef DEBUG
 #include "io_ops.h"
 #endif
 
@@ -34,7 +43,11 @@
 
 using namespace std;
 namespace fs = std::filesystem;
-
+#ifdef DEBUG
+#pragma message("DEBUG is defined")
+#else
+#pragma message("DEBUG is NOT defined")
+#endif
 void print_usage(const char* program_name) {
     cout << "-------------------------------------------------------" << endl;
     cout << "\n";
@@ -162,6 +175,7 @@ Settings parse_arguments(int argc, char* argv[]) {
         } else if (arg == "--threads") {
             if (++i < argc) {
                 settings.threads = stoul(argv[i]);
+                
             } else {
                 throw runtime_error("Error: Missing value for --threads");
             }
@@ -231,112 +245,59 @@ Settings parse_arguments(int argc, char* argv[]) {
     return settings;
 }
 
+
 string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
     std::string label;            
     uint8_t seq[sdbg.k()];
-    uint32_t t = sdbg.GetLabel(node, seq);
+    sdbg.GetLabel(node, seq);
     for (int i = sdbg.k() - 1; i >= 0; --i) label.append(1, "ACGT"[seq[i] - 1]);
     reverse(label.begin(), label.end());
     return label;
 }
-// int main(int argc, char** argv) {
-//     // %% PARSE ARGUMENTS %%
-//     Settings settings = parse_arguments(argc, argv);
-//     string name_of_genome = "test";
-//     if (check_for_error(settings)){
-//         //tell the user which folder we are deleting
-//         cout<< "Folder " << settings.output_folder << " will be deleted due to errors." << endl;
-        
-//         cout << "Do you want that folder to be removed? (y/n): ";
-//         char answer;
-//         cin >> answer;
-//         if (answer != 'y' && answer != 'Y') {
-//             cout << "Exiting the program." << endl;
-//             return 1;
-//         }
-//         cout << "Removing folder: " << settings.output_folder << endl;
-//         fs::remove_all(settings.output_folder); 
-//         return 1;
-//     }
-//     // %% PARSE ARGUMENTS %%
 
-//     // %% BUILD GRAPH %%
-//      SDBGBuild sdbg_build(settings);
-//     // %% BUILD GRAPH %%
-    
-    
-//     int length_bound = 77;
-//     SDBG sdbg;
-//     string graph_folder_old = settings.graph_folder;
-//     settings.graph_folder= settings.graph_folder+ "/graph"; //"/vol/d/development/git/mcaat_master/mcaat/build/mcaat_run_2025-08-27_09-53-11/graph/graph";
-//     char * cstr = new char [settings.graph_folder.length()+1];
-//     std::strcpy (cstr, settings.graph_folder.c_str());
-//     cout << "Graph folder: " << cstr << endl;
-//     sdbg.LoadFromFile(cstr);
-//     cout << "Loaded the graph" << endl;
-//     /*
-//     string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
-//     uint8_t end_seq[24];
-//     for (int i = 0; i < 23; ++i) {
-//         end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
-//     }
-//     int64_t end_node = sdbg.IndexBinarySearch(end_seq);
-//     cout<<"EdgeMultiplicity: "<<sdbg.EdgeMultiplicity(end_node)<<endl;
-//     cout<<"Indegree: "<<sdbg.EdgeIndegree(end_node)<<endl;
-//     cout<<"Outdegree: "<<sdbg.EdgeOutdegree(end_node)<<endl;
-//     // %% LOAD GRAPH %%
-//     cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
-//     PhageCurator phage_curator(sdbg);
-//     std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_node, 1000,5000);
-//     phage_curator.ReconstructPaths(paths);
-//     for(const auto& sequence : phage_curator.reconstructed_sequences) {
-//         std::cout << sequence << std::endl;
-//     }
-// */
-//     delete[] cstr;
+uint64_t findNodeFromKmer(const SDBG& sdbg, const std::string& kmer) {
+    int k = sdbg.k();
+    if (static_cast<int>(kmer.size()) != k) {
+        std::cerr << "Warning: kmer size " << kmer.size() << " does not match k=" << k << std::endl;
+        return UINT64_MAX; // or handle error
+    }
+    std::vector<uint8_t> seq(k);
+    for (int i = 0; i < k; ++i) {
+        seq[i] = "ACGT"s.find(kmer[i]) + 1;
+    }
+    int64_t result = sdbg.IndexBinarySearch(seq.data());
+    return (result == -1) ? UINT64_MAX : static_cast<uint64_t>(result);
+}
 
-    
-//     // %% FBCE ALGORITHM %%
-//     cout << "FBCE START:" << endl;
-//     auto start_time = chrono::high_resolution_clock::now();
-//     CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
-    
-//     int number_of_spacers_total = 0;
-//     auto cycles = cycle_finder.results;
-//     cout << "Number of nodes in results: " << cycles.size() << endl;
-//     // %% FBCE ALGORITHM %%
-    
-//     // ############ DEVELOPMENT ############
-
-//     #ifdef DEVELOP
-//     //io_ops::read_cycles("cycles.json");
-//     //io_ops::write_cycles("out.json", cycles);
-//     //io_ops::write_nodes_gfa("out.gfa", sdbg); // CAREFUL: WILL TAKE A LOT OF SPACE IF GRAPH IS HUGE!
-//     #endif
-
-//     // ############ DEVELOPMENT ############
-
-
-//     int number_of_spacers = 0;
-//     // // %% FILTERS %%
-//      cout << "FILTERS START:" << endl;
-//      Filters filters(sdbg, cycles);
-//      auto  SYSTEMS = filters.ListArrays(number_of_spacers);
-//      cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
-//     // // %% FILTERS %%
-
-
-
-//     // //%% POST PROCESSING %%
-//      cout << "POST PROCESSING START:" << endl;
-//      CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
-//      analyzer.run_analysis();
-//      cout << "Saved in: " << settings.output_file << endl;
-//     //%% POST PROCESSING %%
-
-//     // %% DELETE THE GRAPH FOLDER %%
-// }
-
+std::map<uint64_t, std::vector<std::vector<uint64_t>>> createRepeatToSpacerNodes(const SDBG& sdbg, const std::map<std::string, std::vector<std::string>>& systems_from_analyzer) {
+    std::map<uint64_t, std::vector<std::vector<uint64_t>>> repeat_to_spacer_nodes;
+    int k = sdbg.k();
+    for (const auto& [repeat, spacers] : systems_from_analyzer) {
+        if (static_cast<int>(repeat.size()) < k) continue;
+        std::string first_kmer = repeat.substr(0, k);
+        uint64_t key_node = findNodeFromKmer(sdbg, first_kmer);
+        if (key_node == UINT64_MAX) continue; // invalid
+        std::vector<std::vector<uint64_t>> spacer_node_vectors;
+        for (const auto& spacer : spacers) {
+            std::vector<uint64_t> nodes;
+            int L = spacer.size();
+            for (int i = 0; i <= L - k; ++i) {
+                std::string kmer = spacer.substr(i, k);
+                uint64_t node = findNodeFromKmer(sdbg, kmer);
+                if (node != UINT64_MAX) {
+                    nodes.push_back(node);
+                }
+            }
+            if (!nodes.empty()) {
+                spacer_node_vectors.push_back(std::move(nodes));
+            }
+        }
+        if (!spacer_node_vectors.empty()) {
+            repeat_to_spacer_nodes[key_node] = std::move(spacer_node_vectors);
+        }
+    }
+    return repeat_to_spacer_nodes;
+}
 #ifdef DEBUG
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
@@ -368,7 +329,7 @@ int main(int argc, char** argv) {
     SDBG sdbg;
     vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-27_09-53-11/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
     string graph_folder_old = settings.graph_folder;///vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46
-    settings.graph_folder=folders[0];
+    settings.graph_folder=folders[1];
     char * cstr = new char [settings.graph_folder.length()+1];
     std::strcpy (cstr, settings.graph_folder.c_str());
     cout << "Graph folder: " << cstr << endl;
@@ -378,26 +339,25 @@ int main(int argc, char** argv) {
     // %% LOAD GRAPH %%
     
     delete[] cstr;
+    string ending_seq = "CAGAGATAGAAATTATTTTTATTATACGTTTTTTTGT";
+    vector<int64_t> end_nodes;
+    //using findNodeFromKmer find all the node ids in the ending_seq
+    for (size_t i = 0; i <= ending_seq.size() - sdbg.k(); ++i) {
+        string kmer = ending_seq.substr(i, sdbg.k());
+        uint64_t node = findNodeFromKmer(sdbg, kmer);
+        if (node != UINT64_MAX) {
+            end_nodes.push_back(node);
+        }
+    }
+    //print all the end nodes
+    cout << "End nodes: ";
+    for (const auto& node : end_nodes) {
+        cout << node << " ";
+    }
+    cout << endl;
 
-        
-    string ending_kmer = "ATTTTTATTATACGTTTTTTTGT";
-    uint8_t end_seq[24];
-    for (int i = 0; i < 23; ++i) {
-        end_seq[i] = "ACGT"s.find(ending_kmer[i]) + 1;
-    }
-    int64_t end_node = sdbg.IndexBinarySearch(end_seq);
-    cout<<"EdgeMultiplicity: "<<sdbg.EdgeMultiplicity(end_node)<<endl;
-    cout<<"Indegree: "<<sdbg.EdgeIndegree(end_node)<<endl;
-    cout<<"Outdegree: "<<sdbg.EdgeOutdegree(end_node)<<endl;
-    // %% LOAD GRAPH %%
-    cout << "Loaded k-mer: " << ending_kmer << " as node: " << end_node << endl;
-    PhageCurator phage_curator(sdbg);
-    std::vector<std::vector<uint64_t>> paths = phage_curator.DepthLimitedPaths(end_node, 1000,5000);
-    phage_curator.ReconstructPaths(paths);
-    for(const auto& sequence : phage_curator.reconstructed_sequences) {
-        std::cout << sequence << std::endl;
-    }
-/*
+
+
     // %% FBCE ALGORITHM %%
     cout << "FBCE FROM DEBUG START:" << endl;
     auto start_time = chrono::high_resolution_clock::now();
@@ -408,24 +368,46 @@ int main(int argc, char** argv) {
     // %% FBCE ALGORITHM %%
     
     int number_of_spacers = 0;
+    
     // %% FILTERS %%
     cout << "FILTERS START:" << endl;
     Filters filters(sdbg, cycles);
     auto  SYSTEMS = filters.ListArrays(number_of_spacers);
     cout<< "Number of spacers: " << number_of_spacers << " before cleaning"<<endl;
     // %% FILTERS %%
+
     //%% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
     CRISPRAnalyzer analyzer(SYSTEMS, settings.output_file);
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
+    auto systems_from_analyzer = analyzer.getSystems();
+    auto repeat_to_spacer_nodes = createRepeatToSpacerNodes(sdbg, systems_from_analyzer);
+    cout << "Created repeat_to_spacer_nodes map with " << repeat_to_spacer_nodes.size() << " entries." << endl;
     //%% POST PROCESSING %%
 
+    //%% PROTOSPACER ISOLATION %%
+    IsolateProtospacers isolator(sdbg, repeat_to_spacer_nodes);
+    pair<std::map<uint64_t,std::set<uint64_t>>,std::map<uint64_t,std::set<uint64_t>>> protospacer_nodes = isolator.getProtospacerNodes();
+    auto grouped_paths_protospacers = isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.first, protospacer_nodes.second, 50,1);
+    isolator.WritePathsToFile(grouped_paths_protospacers, "grouped_paths_protospacers.txt");
+    
+    //%% PROTOSPACER ISOLATION %%
+    PhageCurator phage_curator(sdbg, grouped_paths_protospacers, cycles);
+    auto extended_paths = phage_curator.ExtendFromGroupedPaths(1000, 5000);
+    phage_curator.ReconstructPaths(extended_paths);
+    phage_curator.WriteSequencesToFasta("PhageCurator.txt");    
+    //io_ops::write_nodes_gfa("output.gfa", sdbg);
+    
+
+    //%% POST PROCESSING %%
     // %% DELETE THE GRAPH FOLDER %%
     //fs::remove_all(graph_folder_old);
     // %% DELETE THE GRAPH FOLDER %%          
-    */  
+    
 }
+
+
 #else
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%

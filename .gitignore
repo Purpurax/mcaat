@@ -16,3 +16,5 @@ test_ids
 **/tiny_graph
 *.timetracker
 libs/megahit
+/_build/
+/_deps/

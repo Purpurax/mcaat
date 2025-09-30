@@ -1,7 +1,7 @@
 #include "path_writer.h"
-
-PathWriter::PathWriter(string mode, SDBG& sdbg, vector<uint64_t> path, string genome_id, string type, vector<bool>& visited) 
-    : sdbg(sdbg), genome_id(genome_id), type(type), visited(visited) {
+#ifdef DEBUG
+PathWriter::PathWriter(string mode, SDBG& sdbg, vector<uint64_t> path, string genome_id, string type) 
+    : sdbg(sdbg), genome_id(genome_id), type(type) {
     this->CollectPathsIntoStringStreams(path);
 }
 
@@ -20,45 +20,37 @@ string PathWriter::FetchNodeLabel(size_t node) {
 }
 
 
+
+
 //@brief Write the path nodes ids, their labels and the multiplicities to the respective files
 void PathWriter::CollectPathsIntoStringStreams(vector<uint64_t> path) {
-    // Reserve space and add the start node to the path
-    path.reserve(path.size() + 1);
-    path.push_back(path[0]);
+    // Create the folder and get its name
 
-    // Create string streams for path, id, and multiplicity
-    stringstream ss_path, ss_id, ss_multiplicity;
+    // Create string streams for path and id
+    stringstream ss_path, ss_id;
 
     // Iterate over the path and populate the string streams
     for (uint64_t node : path) {
         ss_path << FetchNodeLabel(node) << " ";
         ss_id << node << " ";
-        ss_multiplicity << this->sdbg.EdgeMultiplicity(node) << " ";
-        this->visited[node] = true;
     }
 
     // Add new lines to the string streams
     ss_path << endl;
     ss_id << endl;
-    ss_multiplicity << endl;
-    ofstream cycle_report_file;
-    ofstream path_report_file;
-    ofstream multiplicity_report_file;
 
-    string cycle_file_name = this->genome_id + "/str_paths.txt";
-    string id_file_name = this->genome_id + "/id_paths.txt";
-    string multiplicity_file_name = this->genome_id + "/multiplicity_distribution.txt";
-    
-    multiplicity_report_file.open(multiplicity_file_name, std::ios_base::app);
-    cycle_report_file.open(cycle_file_name, std::ios_base::app);
-    path_report_file.open(id_file_name, std::ios_base::app);
-    // Write the string streams to the respective files
-    cycle_report_file << ss_path.str();
-    path_report_file << ss_id.str();
-    multiplicity_report_file << ss_multiplicity.str();
+    // Open files in the created folder
+    ofstream cycles_file(this->genome_id + "/cycles.txt", std::ios_base::app);
+    ofstream labels_file(this->genome_id + "/labels.txt", std::ios_base::app);
 
-    // Close the files
-    cycle_report_file.close();
-    path_report_file.close();
-    multiplicity_report_file.close();
+    // Write to files
+    cycles_file << ss_path.str();
+    labels_file << ss_id.str();
+
+    // Close files
+    cycles_file.close();
+    labels_file.close();
 }
+
+
+#endif

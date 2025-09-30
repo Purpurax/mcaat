@@ -8,8 +8,8 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_CXX_STANDARD 17)
 
 # Add optimization flags for performance
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -flto")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 
 find_package(ZLIB)
 if(NOT ZLIB_FOUND)
@@ -84,6 +84,7 @@ file(GLOB_RECURSE SOURCES_WITHOUT_MAIN "src/*.cpp")
 list(REMOVE_ITEM SOURCES_WITHOUT_MAIN "${CMAKE_SOURCE_DIR}/src/main.cpp")
 file(GLOB_RECURSE INCLUDES "include/*.h")
 file(GLOB_RECURSE TESTS_SOURCE "tests/*.cpp")
+list(APPEND MAIN_SOURCE src/isolate_protospacers.cpp)
 file(GLOB_RECURSE ASMBL_SOURCE "libs/megahit/src/assembly/*.cpp")
 file(GLOB_RECURSE LCASM_SOURCE "libs/megahit/src/localasm/*.cpp")
 file(GLOB_RECURSE IDBA_SOURCE "libs/megahit/src/idba/*.cpp")

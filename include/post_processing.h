@@ -17,6 +17,7 @@ private:
     int omitted_repeats = 0;
     int total_spacers = 0;
     int amount, min_sl, max_sl, min_rl, max_rl, mean_similarity;
+    std::map<std::string, std::vector<std::string>> grouped_repeat_cycles;
 
 public:
     CRISPRAnalyzer(unordered_map<string, vector<string>> systems_map,
@@ -27,7 +28,9 @@ public:
         min_sl(minsl), max_sl(maxsl), min_rl(minrl), max_rl(maxrl),
         mean_similarity(mean_sim) {}
 
-
+    std::map<std::string, std::vector<std::string>> getSystems() const {
+        return this->grouped_repeat_cycles;
+    }
 
     void parse_input(const std::string& content) {
         std::istringstream stream(content);
@@ -131,9 +134,11 @@ public:
                          std::ofstream& out) {
         out << "--------------------------------------------------\n";
         out << repeat << "\n";
+        this->grouped_repeat_cycles[repeat] = {};
         out << "--------------------------------------------------\n";
         for (const auto& spacer : spacers) {
             out << spacer << "\n";
+            this->grouped_repeat_cycles[repeat].push_back(spacer);
         }
         out << "--------------------------------------------------\n";
         out << "Number of Spacers: " << spacers.size() << "\n";
@@ -186,6 +191,8 @@ public:
             generate_report(updated_repeat, unique_vec, report);
             total_spacers += unique_vec.size();
         }
+        //fill the data in for the grouped_repeat_cycles
+
 
         report << "Number of Systems: " << (systems.size() - omitted_repeats) << "\n";
         report << "Number of Spacers: " << total_spacers << "\n";

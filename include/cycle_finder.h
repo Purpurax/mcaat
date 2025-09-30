@@ -27,7 +27,7 @@ class CycleFinder {
         uint8_t minimal_length;
         static constexpr size_t MAX_EDGE_COUNT = 4;
         SDBG& sdbg;
-        string genome_name;
+        
         uint16_t cluster_bounds;
         vector<bool> visited;
         vector<bool> look_up_table;
@@ -53,6 +53,7 @@ class CycleFinder {
         //#### HELPER FUNCTIONS FOR DLS ####
 
     public:
+        string genome_name;
         CycleFinder(SDBG& sdbg, int length_bound, int minimal_length, string genome_name,int threads_count);
         //write a getter for results
         unordered_map<uint64_t, vector<vector<uint64_t>>> results;
@@ -66,7 +67,7 @@ class CycleFinder {
         size_t ChunkStartNodes(map<int, vector<uint64_t>, std::greater<int>>& start_nodes_chunked);
         bool DepthLevelSearch(uint64_t start, uint64_t target, int limit, int& reached_depth);
         //#### DLS ####
-
+        string CreateFolder();
         //#### CYCLE ENUMERATION ####
         vector<vector<uint64_t>> FindCycle(uint64_t start_node, vector<uint64_t> path, map<uint64_t, int> lock, vector<unordered_set<uint64_t>> stack, vector<int> backtrack_lengths);
         vector<vector<uint64_t>> FindCycleUtil(uint64_t startnode);

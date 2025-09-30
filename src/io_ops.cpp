@@ -1,5 +1,5 @@
 #include "io_ops.h"
-#ifdef DEVELOP
+#ifdef DE
 
 std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> io_ops::read_cycles(const std::string& file_path) {
     std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>> cycles;

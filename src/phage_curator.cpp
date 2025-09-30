@@ -12,6 +12,17 @@ PhageCurator::PhageCurator(SDBG& sdbg) : sdbg(sdbg) {
  
 }
 
+PhageCurator::PhageCurator(SDBG& sdbg, const std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>>& grouped_paths, const std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles)
+    : sdbg(sdbg), grouped_paths(grouped_paths), cycles(cycles) {
+    for (const auto& [id, cycle] : cycles) {
+        for (const auto& path : cycle) {
+            for (uint64_t node : path) {
+                cycle_nodes.insert(node);
+            }
+        }
+    }
+}
+
 string PhageCurator::_FetchFirstNode(size_t node) {
     std::string label;            
     uint8_t seq[sdbg.k()];
@@ -41,6 +52,19 @@ void PhageCurator::ReconstructPaths(std::vector<std::vector<uint64_t>> paths) {
         reconstructed_sequences.push_back(result_path);
     }
     return;
+}
+
+void PhageCurator::WriteSequencesToFasta(const std::string& filename) {
+    std::ofstream out(filename);
+    if (!out) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+    int count = 1;
+    for (const auto& seq : reconstructed_sequences) {
+        out << ">sequence_" << count << "\n" << seq << "\n";
+        count++;
+    }
 }
 
 // Adapted DepthLimitedPaths with optimizations from DepthLevelSearch (no logic changes)
@@ -156,7 +180,7 @@ std::vector<std::vector<uint64_t>> PhageCurator::DepthLimitedPaths(uint64_t star
                     // After moving, shrink the pooled vector if it's oversized
                     if (!pooled_paths.empty()) {
                         auto& last_path = pooled_paths.back();
-                        if (last_path.capacity() > (max_depth + 1) * 2) {  // If capacity is >2x needed
+                        if (last_path.capacity() > static_cast<size_t>((max_depth + 1) * 2)) {  // If capacity is >2x needed
                             last_path.shrink_to_fit();  // Shrink to actual size
                         }
                     }
@@ -167,6 +191,118 @@ std::vector<std::vector<uint64_t>> PhageCurator::DepthLimitedPaths(uint64_t star
     return all_paths;
 }
 
+
+std::vector<std::vector<uint64_t>> PhageCurator::DepthLimitedPathsAvoiding(uint64_t start, int lower, int higher, const std::set<uint64_t>& forbidden) {
+    std::vector<std::vector<uint64_t>> all_paths;
+    all_paths.reserve(1024);  // Pre-allocate
+    std::vector<std::pair<uint64_t, std::vector<uint64_t>>> dls_stack;
+    dls_stack.emplace_back(start, std::vector<uint64_t>{start});
+
+    // Thread-local pools
+    static thread_local std::vector<std::pair<uint64_t, std::vector<uint64_t>>> stack_pool;
+    static thread_local phmap::flat_hash_set<uint64_t> visited_pool;
+    static thread_local std::vector<std::vector<uint64_t>> path_pool;
+
+    stack_pool.clear();
+    visited_pool.clear();
+    path_pool.clear();
+
+    if (stack_pool.capacity() == 0) stack_pool.reserve(64);
+    if (visited_pool.capacity() == 0) visited_pool.reserve(1024);
+    if (path_pool.capacity() == 0) path_pool.reserve(64);
+
+    auto& pooled_visited = visited_pool;
+    auto& pooled_paths = path_pool;
+
+    const uint64_t start_node = start;
+    const int min_depth = lower;
+    const int max_depth = higher;
+
+    auto get_path_from_pool = [&]() -> std::vector<uint64_t>& {
+        if (pooled_paths.empty()) {
+            pooled_paths.emplace_back();
+            pooled_paths.back().reserve(max_depth + 1);
+        }
+        auto& path = pooled_paths.back();
+        path.clear();
+        return path;
+    };
+
+    while (!dls_stack.empty()) {
+        auto [v, path] = dls_stack.back();
+        dls_stack.pop_back();
+
+        int current_depth = (int)path.size() - 1;
+        if (__builtin_expect(current_depth >= min_depth && current_depth <= max_depth, 1)) {
+            all_paths.push_back(path);
+            continue;
+        }
+
+        if (__builtin_expect(sdbg.EdgeOutdegreeZero(v), 0)) continue;
+
+        int outdegree = sdbg.EdgeOutdegree(v);
+        if (__builtin_expect(outdegree == 0 || !sdbg.IsValidEdge(v), 0)) continue;
+
+        const int MAX_EDGE_COUNT = 4;
+        uint64_t neighbors[MAX_EDGE_COUNT];
+        int flag = sdbg.OutgoingEdges(v, neighbors);
+        if (__builtin_expect(flag == -1, 0)) continue;
+
+        __builtin_prefetch(&neighbors[0], 0, 1);
+
+        for (int i = 0; i < outdegree; ++i) {
+            uint64_t neighbor = neighbors[i];
+            if (__builtin_expect(std::find(path.begin(), path.end(), neighbor) == path.end(), 1)) {
+                // Check forbidden, but allow start
+                if (forbidden.find(neighbor) != forbidden.end() && neighbor != start_node) continue;
+                auto visited_it = pooled_visited.find(neighbor);
+                bool not_visited = (visited_it == pooled_visited.end());
+                bool is_start_revisit = (neighbor == start_node && current_depth > 0);
+
+                if (__builtin_expect(not_visited || is_start_revisit, 1)) {
+                    pooled_visited.insert(neighbor);
+                    auto new_path = get_path_from_pool();
+                    new_path = path;
+                    new_path.push_back(neighbor);
+                    uint64_t current = neighbor;
+                    while (true) {
+                        uint64_t next = sdbg.NextSimplePathEdge(current);
+                        if (next == SDBG::kNullID || (int)new_path.size() - 1 >= max_depth) break;
+                        // Also check forbidden for extended
+                        if (forbidden.find(next) != forbidden.end() && next != start_node) break;
+                        new_path.push_back(next);
+                        current = next;
+                    }
+                    dls_stack.emplace_back(current, std::move(new_path));
+                    if (!pooled_paths.empty()) {
+                        auto& last_path = pooled_paths.back();
+                        if (last_path.capacity() > static_cast<size_t>((max_depth + 1) * 2)) {
+                            last_path.shrink_to_fit();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return all_paths;
+}
+
+
+std::vector<std::vector<uint64_t>> PhageCurator::ExtendFromGroupedPaths(int min_depth, int max_depth) {
+    std::vector<std::vector<uint64_t>> all_extended_paths;
+    for (const auto& [outer_key, inner_map] : grouped_paths) {
+        for (const auto& [inner_key, paths_vec] : inner_map) {
+            for (const auto& path : paths_vec) {
+                if (!path.empty()) {
+                    uint64_t start = path.back();
+                    auto paths = DepthLimitedPathsAvoiding(start, min_depth, max_depth, cycle_nodes);
+                    all_extended_paths.insert(all_extended_paths.end(), paths.begin(), paths.end());
+                }
+            }
+        }
+    }
+    return all_extended_paths;
+}
 
 std::vector<BeamPathInfo> PhageCurator::BeamSearchPaths(uint64_t start, int length, int beam_width) {
     std::vector<BeamPathInfo> beam = {{ {start}, 0.0 }};
