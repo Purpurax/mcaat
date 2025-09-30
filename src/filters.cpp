@@ -13,107 +13,170 @@ string Filters::_FetchNodeLabel(size_t node) {
     reverse(label.begin(), label.end());
     return label;
 }
+Filters::Filters(SDBG& sdbg, std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles)
+    : sdbg(sdbg), cycles(cycles) {}
 
-unordered_map<string, vector<string>> Filters::ListArrays(
-    vector<uint64_t> node_order,
-    int& number_of_spacers
-) {
+std::vector<uint64_t> Filters::FindRepeatNodePaths(vector<uint64_t> repeat_nodes, uint64_t start_node) {
+    uint64_t start = 0;
+    vector<uint64_t> all_the_neighbors;
+
+    for (const auto& node : repeat_nodes) {
+        uint64_t outgoings[4];
+        int num_outgoings = this->sdbg.OutgoingEdges(node, outgoings);
+        for (int i = 0; i < num_outgoings; i++) {
+            all_the_neighbors.push_back(outgoings[i]);
+        }
+    }
+    for (const auto& node : repeat_nodes)
+        if (std::find(all_the_neighbors.begin(), all_the_neighbors.end(), node) == all_the_neighbors.end())
+            start = node;
+
+    int maxSize = 0;
+    vector<vector<uint64_t>> cycles_per_group = this->cycles[start_node];
+    std::vector<uint64_t> arr;
+    auto it = std::find(arr.begin(), arr.end(), start);
+    int position_to_rotate = std::distance(arr.begin(), it);
+
+    for (int i = 0; i < cycles_per_group.size(); i++) {
+        if (cycles_per_group[i].size() > maxSize) {
+            maxSize = cycles_per_group[i].size();
+            arr = cycles_per_group[i];
+        }
+    }
+
+    arr.resize(repeat_nodes.size());
+    return arr;
+}
+
+pair<vector<uint64_t>, vector<vector<uint64_t>>> Filters::_FindCRISPRArrayNodes(uint64_t start_node) {
+    std::unordered_map<uint64_t, int> element_count;
+
+    if (cycles.find(start_node) == cycles.end()) {
+        std::cerr << "Error: start_node not found in cycles." << std::endl;
+        return {{}, {}};
+    }
+    auto data = cycles[start_node];
+    if (data.size() < 2) {
+        return {{}, {}};
+    }
+    for (auto& vec : data) {
+        vec.pop_back();
+    }
+    cycles[start_node] = data;
+
+    int threshold = static_cast<int>(data.size());
+
+    for (const auto& vec : data) {
+        std::unordered_set<uint64_t> uniqueElements(vec.begin(), vec.end());
+        for (const auto& element : uniqueElements) {
+            element_count[element]++;
+        }
+    }
+
+    if (data.empty() || data[0].empty()) {
+        std::cerr << "Error: data or data[0] is empty." << std::endl;
+        return {{}, {}};
+    }
+    std::vector<uint64_t> repeat_nodes;
+    for (const auto& [element, count] : element_count) {
+        if (count >= threshold) {
+            repeat_nodes.push_back(element);
+        }
+    }
+
+    if (repeat_nodes.size() >= 27) {
+        return {{}, {}};
+    }
+
+    std::vector<std::vector<uint64_t>> spacer_nodes;
+
+    repeat_nodes = FindRepeatNodePaths(repeat_nodes, start_node);
+
+    for (auto& vec : this->cycles[start_node]) {
+        if (vec.size() - repeat_nodes.size() >= 23) {
+            std::vector<uint64_t> spacers(vec.begin() + repeat_nodes.size(), vec.end());
+            spacer_nodes.push_back(spacers);
+        }
+    }
+    if (repeat_nodes.size() == 0 || spacer_nodes.size() < 3) {
+        return {{}, {}};
+    }
+    return {repeat_nodes, spacer_nodes};
+}
+
+unordered_map<string, vector<string>> Filters::ListArrays(int& number_of_spacers) {
     unordered_map<string, vector<string>> CRISPRArrays;
-    int counter = 0;
     for (const auto& [start_node, _] : cycles) {
         auto CRISPRArrayNodes = _FindCRISPRArrayNodes(start_node);
         auto spacers_nodes = CRISPRArrayNodes.second;
         vector<uint64_t> repeat_nodes = CRISPRArrayNodes.first;
         if (!CRISPRArrayNodes.first.empty() && !CRISPRArrayNodes.second.empty()) {
             string repeat = _FetchNodeLabel(repeat_nodes[0]);
-            
             for (size_t i = 1; i < repeat_nodes.size(); i++) {
                 std::string node_label = _FetchNodeLabel(repeat_nodes[i]);
-                    // Method 1: Using back() method
-                char lastChar = node_label.back();  // Get the last character
-                 std::string lastCharStr(1, lastChar);  // Convert char to string
-              
+                char lastChar = node_label.back();
+                std::string lastCharStr(1, lastChar);
                 repeat += lastCharStr;
             }
-            vector<vector<uint64_t>> cycles_nodes =this->cycles[start_node];
-            //print the first spacer, first cycle and repeat nodes
-            
+            vector<vector<uint64_t>> cycles_nodes = this->cycles[start_node];
             vector<string> spacers_temp;
             vector<string> spacers;
-            string all_cycles_togehter = _FetchNodeLabel(node_order[0]);
-            for (int i = 1; i < node_order.size(); ++i) {
-                uint64_t node = node_order[i];
-                std::string node_label = _FetchNodeLabel(node);
-                // Method 1: Using back() method
-                char lastChar = node_label.back();  // Get the last character
-                std::string lastCharStr(1, lastChar);  // Convert char to string
-                all_cycles_togehter += lastCharStr;
+            string all_cycles_togehter;
+            for (const auto& cycle : cycles_nodes) {
+                std::string cycle_str = _FetchNodeLabel(cycle[0]);
+                for (size_t i = 1; i < cycle.size(); i++) {
+                    uint64_t node = cycle[i];
+                    std::string node_label = _FetchNodeLabel(node);
+                    char lastChar = node_label.back();
+                    std::string lastCharStr(1, lastChar);
+                    cycle_str += lastCharStr;
+                }
+                all_cycles_togehter += cycle_str.substr(0, cycle_str.size() - 21);
             }
-            
             size_t start = 0;
             size_t end;
-
-            // Iterate through the string and find substrings
             while ((end = all_cycles_togehter.find(repeat, start)) != std::string::npos) {
                 std::string part = all_cycles_togehter.substr(start, end - start);
                 if (!part.empty()) {
                     spacers_temp.push_back(part);
                 }
-                size_t start = 0;
-                size_t end;
-                while ((end = all_cycles_togehter.find(repeat, start)) != std::string::npos) {
-                    std::string part = all_cycles_togehter.substr(start, end - start);
-                    if (!part.empty()) {
-                        spacers_temp.push_back(part);
-                    }
-                    start = end + repeat.size();
-                }
-                if (start < all_cycles_togehter.size()) {
-                    spacers_temp.push_back(all_cycles_togehter.substr(start));
-                }
-                for (const auto& spacer : spacers_temp) {
-                    if (spacer.size() < 23 || spacer.size() > 50)
-                        continue;
-                    spacers.push_back(spacer.substr(0, spacer.size()));
-                    number_of_spacers++;
-                }
-                if (spacers.size() < 2) {
-                    number_of_spacers -= spacers.size();
-                    continue;
-                }
-                CRISPRArrays[repeat] = spacers;
+                start = end + repeat.size();
             }
+            if (start < all_cycles_togehter.size()) {
+                spacers_temp.push_back(all_cycles_togehter.substr(start));
+            }
+            for (const auto& spacer : spacers_temp) {
+                if (spacer.size() < 23 || spacer.size() > 50)
+                    continue;
+                spacers.push_back(spacer.substr(0, spacer.size()));
+                number_of_spacers++;
+            }
+            if (spacers.size() < 2) {
+                number_of_spacers -= spacers.size();
+                continue;
+            }
+            CRISPRArrays[repeat] = spacers;
         }
-        return CRISPRArrays;
     }
-
     return CRISPRArrays;
 }
 
-int Filters::WriteToFile(vector<uint64_t> node_order, const string& filename) {
-    
+int Filters::WriteToFile(const string& filename) {
     ofstream file(filename);
     if (!file.is_open()) {
         throw runtime_error("Failed to open file: " + filename);
     }
     int number_of_spacers = 0;
-    
-    auto CRISPRArrays = ListArrays(node_order, number_of_spacers);
-    
+    auto CRISPRArrays = ListArrays(number_of_spacers);
     for (const auto& [repeat, spacers] : CRISPRArrays) {
-        
         file << "Repeat: " << repeat << endl;
         file << "Number of Spacers: " << spacers.size() << endl;
         file << "Spacers:" << endl;
         for (const auto& spacer : spacers) {
             file << spacer << endl;
         }
-        file <<"----------------------------------" << endl; // Add a blank line between different CRISPR arrays
-
-        
+        file << "----------------------------------" << endl;
     }
     file.close();
-    
     return number_of_spacers;
-
 }
