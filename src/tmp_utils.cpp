@@ -202,31 +202,6 @@ tuple<string, vector<string>, string> get_systems(
     SDBG& sdbg,
     vector<vector<uint64_t>>& ordered_cycles
 ) {
-    // std::cout << "Checking cycle nodes and their multiplicity values" << std::endl;
-    // for (const auto& cycle : ordered_cycles) {
-    //     vector<pair<mul_t, uint64_t>> nodes_with_mult;
-    //     for (const auto& node : cycle) {
-    //         const mul_t multiplicity = sdbg.EdgeMultiplicity(node);
-    //         nodes_with_mult.push_back(std::make_pair(multiplicity, node));
-    //     }
-    //     // Sort nodes_with_mult by multiplicity in descending order
-    //     // std::sort(nodes_with_mult.begin(), nodes_with_mult.end(), 
-    //     //       [](const pair<mul_t, uint64_t>& a, const pair<mul_t, uint64_t>& b) {
-    //     //           return a.first > b.first;
-    //     //       });
-
-    //     // Print nodes_with_mult with all values in one line
-    //     std::cout << "Cycle nodes (multiplicity, node_id): ";
-    //     for (size_t i = 0; i < nodes_with_mult.size(); ++i) {
-    //         std::cout << "(" << nodes_with_mult[i].first << ", " << nodes_with_mult[i].second << ")";
-    //         if (i < nodes_with_mult.size() - 1) {
-    //         std::cout << " ";
-    //         }
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // std::cout << "Done checking multiplicities" << std::endl;
-
     int smallest_cycle_size = ordered_cycles.at(0).size();
     for (const auto& cycle : ordered_cycles) {
         if (cycle.size() < smallest_cycle_size) {
@@ -268,17 +243,16 @@ tuple<string, vector<string>, string> get_systems(
         for (const auto& cycle: ordered_cycles) {
             const uint64_t current_node = cycle.at(cycle.size() - i - 1);
             const string label = fetch_node_label(sdbg, current_node);
-            prev_bp.insert(label.at(0));
+            prev_bp.insert(label.back());
         }
 
-        const bool over_first_k_mer = i > sdbg.k() - extension_to_right;
         const bool bp_branched_off = prev_bp.size() > 1;
-        if (over_first_k_mer && bp_branched_off) {
+        if (bp_branched_off) {
             unordered_set<char> prev_prev_bp;
             for (const auto& cycle: ordered_cycles) {
-                const uint64_t current_node = cycle.at(cycle.size() - i - 2);
-                const string label = fetch_node_label(sdbg, current_node);
-                prev_prev_bp.insert(label.at(0));
+                const uint64_t inner_current_node = cycle.at(cycle.size() - i - 2);
+                const string inner_label = fetch_node_label(sdbg, inner_current_node);
+                prev_prev_bp.insert(inner_label.back());
             }
             
             const bool is_point_mutation = prev_prev_bp.size() == 1;
@@ -289,7 +263,7 @@ tuple<string, vector<string>, string> get_systems(
         }
     }
 
-    const int repeat_length = extension_to_left + extension_to_right;
+    const int repeat_length = extension_to_left + extension_to_right - sdbg.k();
 
     /* Turn cycles into repeats and spacers */
     vector<string> spacers;
@@ -305,9 +279,9 @@ tuple<string, vector<string>, string> get_systems(
             const string label = fetch_node_label(sdbg, node);
             
             if (i < repeat_length) {
-                repeat += label.at(0);
+                repeat += label.back();
             } else {
-                spacer += label.at(0);
+                spacer += label.back();
             }
         }
 
@@ -319,10 +293,6 @@ tuple<string, vector<string>, string> get_systems(
     unordered_map<string, int> repeat_count;
     for (const string& repeat : repeats) {
         repeat_count[repeat]++;
-    }
-
-    for (const auto& [repeat, count] : repeat_count) {
-        std::cout << "Repeat: " << repeat << ", Count: " << count << std::endl;
     }
 
     string consensus_repeat = "";

@@ -34,10 +34,9 @@ vector<string> extract_sequences_from_fastq_file(const string& fastq_file_path);
  * The String is reversed and every 'A' - 'T' and 'C' - 'G' are flipped.
  * Any other character is not modified
  * 
- * @param sequence 
- * @return reversed sequence (string)
+ * @param sequence
  */
-string reverse_pair_ends_sequence(string sequence);
+void reverse_pair_ends_sequence(string& sequence);
 
 /**
  * @internal

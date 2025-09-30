@@ -17,7 +17,7 @@ vector<string> extract_sequences_from_fastq_file(const string& fastq_file_path) 
     return sequences;
 }
 
-string reverse_pair_ends_sequence(string sequence) {
+void reverse_pair_ends_sequence(string& sequence) {
     std::reverse(sequence.begin(), sequence.end());
 
     for (char& base : sequence) {
@@ -28,8 +28,6 @@ string reverse_pair_ends_sequence(string sequence) {
             case 'G': base = 'C'; break;
         }
     }
-
-    return sequence;
 }
 
 uint64_t k_mer_to_node_id(
@@ -116,11 +114,12 @@ vector<vector<uint64_t>> get_reads(
     }
 
     if (fastq_file_2.has_value()) {
-        vector<string> sequences = extract_sequences_from_fastq_file(fastq_file_1);
-        for (const auto& rev_sequence : sequences) {
-            const string sequence = reverse_pair_ends_sequence(rev_sequence);
+        vector<string> sequences = extract_sequences_from_fastq_file(fastq_file_2.value());
+        for (const auto& sequence : sequences) {
+            string rev_sequence = sequence;
+            reverse_pair_ends_sequence(rev_sequence);
 
-            vector<uint64_t> read = get_read_from_sequence(sdbg, nodes_of_cycles, sequence);
+            vector<uint64_t> read = get_read_from_sequence(sdbg, nodes_of_cycles, rev_sequence);
             if (!read.empty()) {
                 reads.push_back(read);
             }
