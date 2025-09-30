@@ -742,7 +742,8 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 vector<uint32_t> order_cycles(
     const Graph& graph,
     const vector<vector<uint64_t>>& reads,
-    const vector<vector<uint64_t>>& cycles
+    const vector<vector<uint64_t>>& cycles,
+    float& confidence
 ) {
     const auto node_to_cycle_map = get_node_to_unique_cycle_map(cycles);
     const auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
@@ -754,10 +755,15 @@ vector<uint32_t> order_cycles(
     for (const auto& node : all_cycle_indices) {
         heuristic_node_values[node] = 0;
     }
+    const int constraint_count_before = constraints.size();
     resolve_cycles_greedy(constraints, heuristic_node_values);
+    confidence = static_cast<float>(constraints.size())
+        / static_cast<float>(constraint_count_before);
 
     std::cout << "      ▸ " << constraints.size();
-    std::cout << " constraints remain after resolving cycles." << std::endl;
+    std::cout << " constraints remain after resolving cycles (confidence = ";
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << (confidence * 100) << "%)" << std::endl;
 
     return solve_constraints_with_topological_sort(constraints, heuristic_node_values, all_cycle_indices);
 }

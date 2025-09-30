@@ -477,6 +477,10 @@ int main(int argc, char** argv) {
         cycles
     );
     cout << "    ▸ Found " << reads.size() << " reads" << endl;
+    if (reads.size() == 0) {
+        cout << "══════════════════════════════════════════════" << endl;
+        return 0;
+    }
 
     end_time = std::chrono::high_resolution_clock::now();
     cout << "\n⏳ Time elapsed: ";
@@ -521,7 +525,7 @@ int main(int argc, char** argv) {
     
     cout << "  🔄 Solving " << remaining_subgraphs.size();
     cout << " subproblems..." << endl;
-    vector<tuple<string, string, vector<string>>> found_systems;
+    vector<tuple<string, string, vector<string>, float>> found_systems;
     for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
         const auto& subgraph = remaining_subgraphs[idx];
         const auto& relevant_reads = remaining_reads[idx];
@@ -539,7 +543,8 @@ int main(int argc, char** argv) {
         cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
         cout << get_cycle_count(cycles_map) << " used" << endl;
 
-        auto cycle_order = order_cycles(subgraph, relevant_reads, relevant_cycles);
+        float confidence = 1.0;
+        auto cycle_order = order_cycles(subgraph, relevant_reads, relevant_cycles, confidence);
 
         cout << "      ▸ The order is ";
         for (auto node : cycle_order) {
@@ -560,7 +565,7 @@ int main(int argc, char** argv) {
         
         cout << "        ▸ Number of spacers: " << spacers.size() << endl;
 
-        found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers));
+        found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers, confidence));
     }
     cout << "  ✅ Completed each subproblem" << endl;
 
@@ -598,7 +603,7 @@ int main(int argc, char** argv) {
 
         size_t no_match_count = 0;
         float average_sequence_similarity = 0.0;
-        for (const auto& [sequence, repeat, spacers] : found_systems) {
+        for (const auto& [sequence, repeat, spacers, confidence] : found_systems) {
             // This leads to overestimation by choosing greedy
             const auto expected_sequence = get_most_similar_sequence(
                 sequence, benchmark_sequences
@@ -631,7 +636,8 @@ int main(int argc, char** argv) {
             cout << (spacer_similarity[2] * 100) << "% spacer similarity variant 2, ";
             cout << "with ";
             cout << spacers.size() << " spacers, ";
-            cout << amount_of_duplicate_spacers << " duplicate spacers, and the repeat: ";
+            cout << amount_of_duplicate_spacers << " duplicate spacers, confidence of cycle resolution: ";
+            cout << (confidence * 100) << "%, and the repeat: ";
             cout << repeat << ", and sequence: ";
             cout << sequence << endl;
             average_sequence_similarity += sequence_similarity;
@@ -656,7 +662,7 @@ int main(int argc, char** argv) {
     // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
     unordered_map<string, vector<string>> all_systems;
-    for (const auto& [_sequence, repeat, spacers] : found_systems) {
+    for (const auto& [_sequence, repeat, spacers, _confidence] : found_systems) {
         all_systems[repeat] = spacers;
     }
     CRISPRAnalyzer analyzer(all_systems, settings.output_file);

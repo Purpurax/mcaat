@@ -337,13 +337,7 @@ pair<tuple<uint32_t, uint32_t>, int> resolve_cycles_greedy_best_edge(
  * @internal
  * @brief Resolves any cycles caused when viewing constraints as edges
  * 
- * @todo outdated doc
- * 
- * @pre 0.0 < confidence <= 1.0
- * 
  * @post Removes constraints that lead to cycles
- * @post confidence will be reduced according to the resolving confidence
- * @post 0.0 < confidence <= 1.0
  * 
  * @param constraints Viewed as edges of a graph
  */
@@ -422,7 +416,8 @@ vector<uint32_t> solve_constraints_with_topological_sort(
 vector<uint32_t> order_cycles(
     const Graph& graph,
     const vector<vector<uint64_t>>& reads,
-    const vector<vector<uint64_t>>& cycles
+    const vector<vector<uint64_t>>& cycles,
+    float& confidence
 );
 
 /**
