@@ -597,7 +597,8 @@ void apply_topological_sort(
     const unordered_map<uint32_t, int>& node_affection_to_start,
     unordered_map<uint32_t, int>& heuristic_node_values,
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges,
-    vector<uint32_t>& total_order
+    vector<uint32_t>& total_order,
+    float& confidence
 ) {
     if (possible_start_nodes.empty()) {
         return;
@@ -606,6 +607,7 @@ void apply_topological_sort(
     // Choose start_node by the heuristic
     int best_start_node = 0;
     float best_heuristic_value = std::numeric_limits<float>::lowest();
+    float total_heuristic_value_summed = 0.0;
     
     for (int i = 0; i < possible_start_nodes.size(); ++i) {
         const uint32_t node = possible_start_nodes[i];
@@ -618,7 +620,11 @@ void apply_topological_sort(
             best_heuristic_value = current_heuristic_value;
             best_start_node = i;
         }
+
+        total_heuristic_value_summed += std::abs(current_heuristic_value);
     }
+
+    confidence += (std::abs(best_heuristic_value) / total_heuristic_value_summed);
 
     uint32_t start_node = possible_start_nodes[best_start_node];
     total_order.push_back(start_node);
@@ -665,14 +671,16 @@ void apply_topological_sort(
         node_affection_to_start,
         heuristic_node_values,
         edges,
-        total_order
+        total_order,
+        confidence
     );
 }
 
 vector<uint32_t> solve_constraints_with_topological_sort(
     const vector<tuple<uint32_t, uint32_t>>& constraints,
     unordered_map<uint32_t, int>& heuristic_node_values,
-    const vector<uint32_t>& nodes
+    const vector<uint32_t>& nodes,
+    float& confidence
 ) {
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges;
     for (const auto& constraint : constraints) {
@@ -728,13 +736,17 @@ vector<uint32_t> solve_constraints_with_topological_sort(
     }
 
     vector<uint32_t> total_order;
+    confidence = 0.0;
     apply_topological_sort(
         possible_start_nodes,
         node_affection_to_start,
         heuristic_node_values,
         edges,
-        total_order
+        total_order,
+        confidence
     );
+
+    confidence /= total_order.size();
 
     return total_order;
 }
@@ -743,7 +755,8 @@ vector<uint32_t> order_cycles(
     const Graph& graph,
     const vector<vector<uint64_t>>& reads,
     const vector<vector<uint64_t>>& cycles,
-    float& confidence
+    float& confidence_cycle_resolution,
+    float& confidence_topological_sort
 ) {
     const auto node_to_cycle_map = get_node_to_unique_cycle_map(cycles);
     const auto all_cycle_indices = get_all_cycle_indices(node_to_cycle_map);
@@ -757,15 +770,20 @@ vector<uint32_t> order_cycles(
     }
     const int constraint_count_before = constraints.size();
     resolve_cycles_greedy(constraints, heuristic_node_values);
-    confidence = static_cast<float>(constraints.size())
+    confidence_cycle_resolution = static_cast<float>(constraints.size())
         / static_cast<float>(constraint_count_before);
 
     std::cout << "      ▸ " << constraints.size();
     std::cout << " constraints remain after resolving cycles (confidence = ";
     std::cout << std::fixed << std::setprecision(2);
-    std::cout << (confidence * 100) << "%)" << std::endl;
+    std::cout << (confidence_cycle_resolution * 100) << "%)" << std::endl;
 
-    return solve_constraints_with_topological_sort(constraints, heuristic_node_values, all_cycle_indices);
+    return solve_constraints_with_topological_sort(
+        constraints,
+        heuristic_node_values,
+        all_cycle_indices,
+        confidence_topological_sort
+    );
 }
 
 vector<vector<uint64_t>> get_ordered_cycles(

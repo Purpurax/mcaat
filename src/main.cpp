@@ -455,7 +455,7 @@ int main(int argc, char** argv) {
     // // %% FILTER CYCLES %%
     // cout << "FILTER CYCLES START:" << endl;
     // int amount_of_cycles_before = get_cycle_count(cycles_map);
-    // // keep_relevant_cycles(cycles_map);
+    // get_minimum_cycles_for_full_coverage(cycles);
     // int amount_of_cycles_after = get_cycle_count(cycles_map);
     // cout << amount_of_cycles_after << " out of ";
     // cout << amount_of_cycles_before << " are kept" << endl;
@@ -525,7 +525,7 @@ int main(int argc, char** argv) {
     
     cout << "  🔄 Solving " << remaining_subgraphs.size();
     cout << " subproblems..." << endl;
-    vector<tuple<string, string, vector<string>, float>> found_systems;
+    vector<tuple<string, string, vector<string>, float, float>> found_systems;
     for (size_t idx = 0; idx < remaining_subgraphs.size(); ++idx) {
         const auto& subgraph = remaining_subgraphs[idx];
         const auto& relevant_reads = remaining_reads[idx];
@@ -543,14 +543,27 @@ int main(int argc, char** argv) {
         cout << "      🛈 Cycles with " << relevant_cycles.size() << "/";
         cout << get_cycle_count(cycles_map) << " used" << endl;
 
-        float confidence = 1.0;
-        auto cycle_order = order_cycles(subgraph, relevant_reads, relevant_cycles, confidence);
+        float confidence_cycle_resolution = 1.0;
+        float confidence_topological_sort = 1.0;
+        auto cycle_order = order_cycles(
+            subgraph,
+            relevant_reads,
+            relevant_cycles,
+            confidence_cycle_resolution,
+            confidence_topological_sort
+        );
 
         cout << "      ▸ The order is ";
         for (auto node : cycle_order) {
             cout << node << " ";
         }
         cout << endl;
+
+        cout << "      ▸ Cycles were resolved with a confidence of ";
+        cout << std::fixed << std::setprecision(2);
+        cout << (confidence_cycle_resolution * 100) << "%" << endl;
+        cout << "      ▸ Topological sort has a confidence of ";
+        cout << (confidence_topological_sort * 100) << "%" << endl;
 
         cout << "      ▸ Turning the cycle order into a node order" << endl;
         auto ordered_cycles = get_ordered_cycles(cycle_order, relevant_cycles);
@@ -565,7 +578,13 @@ int main(int argc, char** argv) {
         
         cout << "        ▸ Number of spacers: " << spacers.size() << endl;
 
-        found_systems.push_back(std::make_tuple(full_sequence, repeat, spacers, confidence));
+        found_systems.push_back(std::make_tuple(
+            full_sequence,
+            repeat,
+            spacers,
+            confidence_cycle_resolution,
+            confidence_topological_sort
+        ));
     }
     cout << "  ✅ Completed each subproblem" << endl;
 
@@ -603,7 +622,7 @@ int main(int argc, char** argv) {
 
         size_t no_match_count = 0;
         float average_sequence_similarity = 0.0;
-        for (const auto& [sequence, repeat, spacers, confidence] : found_systems) {
+        for (const auto& [sequence, repeat, spacers, confidence_cycle_resolution, confidence_topological_sort] : found_systems) {
             // This leads to overestimation by choosing greedy
             const auto expected_sequence = get_most_similar_sequence(
                 sequence, benchmark_sequences
@@ -637,7 +656,8 @@ int main(int argc, char** argv) {
             cout << "with ";
             cout << spacers.size() << " spacers, ";
             cout << amount_of_duplicate_spacers << " duplicate spacers, confidence of cycle resolution: ";
-            cout << (confidence * 100) << "%, and the repeat: ";
+            cout << (confidence_cycle_resolution * 100) << "%, confidence of topological sort: ";
+            cout << (confidence_topological_sort * 100) << "%, and the repeat: ";
             cout << repeat << ", and sequence: ";
             cout << sequence << endl;
             average_sequence_similarity += sequence_similarity;
@@ -662,7 +682,7 @@ int main(int argc, char** argv) {
     // %% POST PROCESSING %%
     cout << "POST PROCESSING START:" << endl;
     unordered_map<string, vector<string>> all_systems;
-    for (const auto& [_sequence, repeat, spacers, _confidence] : found_systems) {
+    for (const auto& [_sequence, repeat, spacers, _conf_a, _conf_b] : found_systems) {
         all_systems[repeat] = spacers;
     }
     CRISPRAnalyzer analyzer(all_systems, settings.output_file);

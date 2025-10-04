@@ -364,13 +364,15 @@ void resolve_cycles_greedy(
  * @param edges Used to increase the start nodes list for the next rec call
  * @param heuristic_node_values The other part of the heuristic to help choose the next start node
  * @param total_order The resulting order
+ * @param confidence The pointer where the confidence should be stored
  */
 void apply_topological_sort(
     vector<uint32_t>& possible_start_nodes,
     const unordered_map<uint32_t, int>& node_affection_to_start,
     unordered_map<uint32_t, int>& heuristic_node_values,
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges,
-    vector<uint32_t>& total_order
+    vector<uint32_t>& total_order,
+    float& confidence
 );
 
 /**
@@ -387,14 +389,15 @@ void apply_topological_sort(
  * @param constraints Used to get an order
  * @param heuristic_node_values Used for the recursive toposort call
  * @param nodes Result will contain all of these elements
- * @param confidence Shows an estimate of how deterministic the result is
+ * @param confidence The average of how likely the next element is in the order
  * 
  * @return Order layed out by constraints (vector<uint32_t>)
  */
 vector<uint32_t> solve_constraints_with_topological_sort(
     const vector<tuple<uint32_t, uint32_t>>& constraints,
     unordered_map<uint32_t, int>& heuristic_node_values,
-    const vector<uint32_t>& nodes
+    const vector<uint32_t>& nodes,
+    float& confidence
 );
 
 /**
@@ -402,14 +405,14 @@ vector<uint32_t> solve_constraints_with_topological_sort(
  * 
  * Takes the reads to derive constraints, which are used to find a total order
  * 
- * @todo Don't use the get_all_cycle_indices, instead rely on cycles.size()
- * 
- * @post confidence is in [0.0, 1.0]
+ * @post confidences are in [0.0, 1.0]
  * @post The result is a permutation of nodes from the graph
  * 
  * @param graph 
  * @param reads 
  * @param cycles 
+ * @param confidence_cycle_resolution The confidence of resolving cycles in the algorithm
+ * @param confidence_topological_sort The confidence of the ordering as the average selection confidence
  * 
  * @return vector<uint32_t> 
  */
@@ -417,7 +420,8 @@ vector<uint32_t> order_cycles(
     const Graph& graph,
     const vector<vector<uint64_t>>& reads,
     const vector<vector<uint64_t>>& cycles,
-    float& confidence
+    float& confidence_cycle_resolution,
+    float& confidence_topological_sort
 );
 
 /**
