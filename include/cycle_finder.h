@@ -14,7 +14,7 @@
 #include <list>
 #include <malloc.h>
 #include <bitset>
-
+#include <atomic> 
 // Parallel hashmap for better performance in DLS
 #include <parallel_hashmap/phmap.h>
 
@@ -62,17 +62,18 @@ class CycleFinder {
         vector<uint64_t> CollectTips();
         void RecursiveReduction(uint64_t tip);
         void InvalidateMultiplicityOneNodes();  
+        int MultiCycleDepthLevelSearch(uint64_t start, uint64_t target, int limit, int min_cycles);
         void writeMapToFile(const std::unordered_map<uint64_t,  std::vector<std::vector<uint64_t>>>& cycles, const std::string& filename);
         //#### DLS ####
         size_t ChunkStartNodes(map<int, vector<uint64_t>, std::greater<int>>& start_nodes_chunked);
-        bool DepthLevelSearch(uint64_t start, uint64_t target, int limit, int& reached_depth);
+        bool DepthLevelSearch(uint64_t start, uint64_t target, int limit, int& reached_depth) ;
         //#### DLS ####
         string CreateFolder();
         //#### CYCLE ENUMERATION ####
         vector<vector<uint64_t>> FindCycle(uint64_t start_node, vector<uint64_t> path, map<uint64_t, int> lock, vector<unordered_set<uint64_t>> stack, vector<int> backtrack_lengths);
         vector<vector<uint64_t>> FindCycleUtil(uint64_t startnode);
         //#### CYCLE ENUMERATION ####
-  
+        void MarkCycleNodesUpTo100();
         // 1. Call ChunkStartNodes to chunk the start nodes based on their multiplicity for parallel processing
         // 1.1 ChunkStartNodes will call DepthLevelSearch to determine if there is a cycle in a certain depth
         // 2. Call FindCycleUtil to find the cycles in the graph

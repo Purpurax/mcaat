@@ -38,7 +38,7 @@ namespace fs = std::filesystem;
 void print_usage(const char* program_name) {
     cout << "-------------------------------------------------------" << endl;
     cout << "\n";
-    cout << "mCAAT - Metagenomic CRISPR Array Analysis Tool v. 0.1" << endl;
+    cout << "mCAAT - Metagenomic CRISPR Array Analysis Tool v. 0.4" << endl;
     cout << "\n";
     cout << "-------------------------------------------------------" << endl;
 }
@@ -306,7 +306,8 @@ int main(int argc, char** argv) {
    
     int length_bound = 77;
     SDBG sdbg;
-    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-27_09-53-11/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
+    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/build/mcaat_run_2025-10-02_14-03-56/graph/graph",
+        "/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-22_13-15-53/graph/graph"};
     string graph_folder_old = settings.graph_folder;///vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46
     settings.graph_folder=folders[1];
     char * cstr = new char [settings.graph_folder.length()+1];
@@ -375,7 +376,7 @@ int main(int argc, char** argv) {
     PhageCurator phage_curator(sdbg, grouped_paths_protospacers, cycles);
     auto extended_paths = phage_curator.ExtendFromGroupedPaths(1000, 5000);
     phage_curator.ReconstructPaths(extended_paths);
-    phage_curator.WriteSequencesToFasta("PhageCurator.txt");    
+    phage_curator.WriteSequencesToFasta("PhageCurator.fasta");    
     //io_ops::write_nodes_gfa("output.gfa", sdbg);
     
 

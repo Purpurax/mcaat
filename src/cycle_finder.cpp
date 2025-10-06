@@ -63,7 +63,7 @@ void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoing
     int flag =sdbg.OutgoingEdges(node, outgoings);
     if(flag!=-1)    
         for (const auto& outgoing : outgoings)
-            if (this->_BackgroundCheck(node, repeat_multiplicity, outgoing))
+            if (this->_BackgroundCheck(node, repeat_multiplicity, outgoing) && sdbg.IsValidEdge(outgoing))
                 outgoings_set.insert(outgoing);
     
     
@@ -81,7 +81,7 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     int flag =sdbg.IncomingEdges(node, incomings);
     if (flag!=-1)
         for (const auto& incoming : incomings)
-            if (this->_BackgroundCheck(node, repeat_multiplicity, incoming))
+            if (this->_BackgroundCheck(node, repeat_multiplicity, incoming) && sdbg.IsValidEdge(incoming))
                 incomings_set.insert(incoming);
 }
 // ## START: HELPER FUNCTIONS FOR DLS ##
@@ -98,7 +98,7 @@ void CycleFinder::_GetOutgoings(uint64_t node, unordered_set<uint64_t>& outgoing
     int flag = sdbg.OutgoingEdges(node, outgoings);
     if(flag!=-1)
         for (const auto& outgoing : outgoings)
-            //if (sdbg.EdgeMultiplicity(outgoing) > 1)
+            if (sdbg.IsValidEdge(outgoing))
                 outgoings_set.insert(outgoing);
     
     
@@ -116,10 +116,9 @@ void CycleFinder::_GetIncomings(uint64_t node, unordered_set<uint64_t>& incoming
     int flag = sdbg.IncomingEdges(node, incomings);
     if (flag!=-1)
         for (const auto& incoming : incomings)
-            //if (sdbg.EdgeMultiplicity(incoming) > 1)
+            if (sdbg.IsValidEdge(incoming))
                 incomings_set.insert(incoming);
 }
-
 // ## END: HELPER FUNCTIONS FOR DLS ##
 
 /**
@@ -279,6 +278,11 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
         uint64_t v = current.node;
         int depth = current.depth;
 
+        // Check if the current node is valid
+        if (!sdbg.IsValidEdge(v)) {
+            continue;
+        }
+
         // Update reached depth
         reached_depth = depth;
 
@@ -309,10 +313,13 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
         // Process all neighbors to maintain correctness (removed faulty simple path optimization)
         // Process neighbors in forward order (SIMD-friendly pattern from megahit)
         // Unroll loop for small outdegrees to reduce overhead
-        if (__builtin_expect(outdegree <= 4, 1)) {
             // Unrolled loop for common case (de Bruijn graph max degree = 4)
             for (int i = 0; i < outdegree; ++i) {
                 uint64_t neighbor = neighbors[i];
+                // Check if the neighbor is valid
+                if (!sdbg.IsValidEdge(neighbor)) {
+                    continue;
+                }
                 auto visited_it = dls_visited.find(neighbor);
                 bool not_visited = (visited_it == dls_visited.end());
                 bool is_start_revisit = (neighbor == start_node && depth > 0);
@@ -322,21 +329,7 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
                     dls_stack.push_back({neighbor, depth + 1});
                 }
             }
-        } else {
-            // Fallback for rare cases with higher degree
-            for (int i = 0; i < outdegree; ++i) {
-                uint64_t neighbor = neighbors[i];
-                auto visited_it = dls_visited.find(neighbor);
-                bool not_visited = (visited_it == dls_visited.end());
-                bool is_start_revisit = (neighbor == start_node && depth > 0);
-                
-                if (not_visited || is_start_revisit) {
-                    dls_visited.insert(neighbor);
-                    dls_stack.push_back({neighbor, depth + 1});
-                }
-            }
-        }
-
+        
         // Megahit-style aggressive early cycle detection
         if (__builtin_expect(v == target_node && depth > 1, 0)) {
             return true;  // Found cycle - exit immediately
@@ -346,13 +339,14 @@ bool CycleFinder::DepthLevelSearch(uint64_t start, uint64_t target, int limit, i
     return false;
 }
 
+
 vector<uint64_t> CycleFinder::CollectTips() {
     
     unordered_set<uint64_t> tips;
 
     #pragma omp parallel for
     for (uint64_t node = 0; node < this->sdbg.size(); node++) 
-        if(this->sdbg.EdgeOutdegree(node) == 0) {
+        if(this->sdbg.EdgeOutdegree(node) == 0 && this->sdbg.IsValidEdge(node)) {
             #pragma omp critical
             tips.insert(node);
         }
@@ -373,24 +367,30 @@ void CycleFinder::RecursiveReduction(uint64_t tip) {
     return;
 }
 void CycleFinder::InvalidateMultiplicityOneNodes() {
-    #pragma omp parallel for
+    uint64_t invalidated = 0;
+    #pragma omp parallel for reduction(+:invalidated)
     for (uint64_t node = 0; node < this->sdbg.size(); node++) {
-        if (this->sdbg.EdgeMultiplicity(node) == 1) {
+        if (this->sdbg.EdgeMultiplicity(node) <=1) {
             this->sdbg.SetInvalidEdge(node);
+            invalidated += 1;
         }
     }
+    std::cout << "Invalidated " << invalidated << " nodes with Mult <= 1\n";
 }
+
 /**
  * @brief Chunks the start nodes based on their multiplicity for parallel processing.
  */
 size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked) {
     uint64_t loaded = 0;
     const int chunk_size = 20000;
+    int jump_stride = 20; // Jump over linear paths every 20 steps
     //this->InvalidateMultiplicityOneNodes();
     #pragma omp parallel num_threads(this->threads_count)
     {
         #pragma omp for schedule(dynamic, chunk_size)
         for (uint64_t node = 0; node < this->sdbg.size(); node++) {
+                if(!this->sdbg.IsValidEdge(node)) continue;
                 size_t edge_indegree = this->sdbg.EdgeIndegree(node);
                 // size_t edge_outdegree = this->sdbg.EdgeOutdegree(node); // unused
                 loaded+=1; 
@@ -398,9 +398,10 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
                 if (edge_indegree >= 2 && this->sdbg.EdgeMultiplicity(node) > 20)
                 {
                     
+                    
                     if(this->_IncomingNotEqualToCurrentNode(node,edge_indegree)) continue;
                     int reached_depth = 0;
-                    
+
                     bool dls = this->DepthLevelSearch(node, node, this->maximal_length, reached_depth);
                     if(!dls) continue; //|-> the last version!
             
@@ -425,23 +426,26 @@ size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& st
  */
 int CycleFinder::FindApproximateCRISPRArrays()
  {
-    /*
+    
     vector<uint64_t> tips = this->CollectTips();
     std::cout<<"BEFORE number of nodes: " << this->sdbg.size() << endl;
     std::cout<< "Number of tips: " << tips.size() << endl;
-
+    
+    this->InvalidateMultiplicityOneNodes();
     for (uint64_t tip : tips) {
         this->RecursiveReduction(tip);
-    } 
-    int invalid_edges = 0;
-    #pragma omp parallel for reduction(+:invalid_edges)
+    }
+    int valid_edges = 0;
+    #pragma omp parallel for reduction(+:valid_edges)
     for (uint64_t node = 0; node < this->sdbg.size(); node++) {
-        if (node==-1) {
-            invalid_edges += 1;
+        if (this->sdbg.IsValidEdge(node)) {
+            valid_edges += 1;
         }
     }
-    */
-    
+
+    tips = this->CollectTips();
+    std::cout<< "Number of tips: " << tips.size() << endl;
+    std::cout<<"VALIDS: " << valid_edges << endl;
     // struct mallinfo mem_info = mallinfo(); // deprecated
     // size_t graph_mem_info = mem_info.uordblks; // unused
     int cumulative = 0;
