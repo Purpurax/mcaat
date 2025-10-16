@@ -9,7 +9,10 @@
 
 //constructor
 PhageCurator::PhageCurator(SDBG& sdbg) : sdbg(sdbg) {
- 
+    bool validation = RevalidateAllNodesButSingleton();
+    if(validation){
+        std::cout << "Graph nodes have successfully been revalidated." << std::endl;
+    }
 }
 
 PhageCurator::PhageCurator(SDBG& sdbg, const std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>>& grouped_paths, const std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles)
@@ -20,6 +23,18 @@ PhageCurator::PhageCurator(SDBG& sdbg, const std::map<uint64_t, std::map<uint64_
                 cycle_nodes.insert(node);
             }
         }
+        // Compute avg_spacers for this cycle
+        phmap::flat_hash_set<uint64_t> unique_nodes;
+        for (const auto& path : cycle) {
+            for (uint64_t node : path) {
+                unique_nodes.insert(node);
+            }
+        }
+        double sum_mult = 0.0;
+        for (uint64_t node : unique_nodes) {
+            sum_mult += sdbg.EdgeMultiplicity(node);
+        }
+        avg_spacers[id] = sum_mult / unique_nodes.size();
     }
 }
 
@@ -304,30 +319,296 @@ std::vector<std::vector<uint64_t>> PhageCurator::ExtendFromGroupedPaths(int min_
     return all_extended_paths;
 }
 
-std::vector<BeamPathInfo> PhageCurator::BeamSearchPaths(uint64_t start, int length, int beam_width) {
-    std::vector<BeamPathInfo> beam = {{ {start}, 0.0 }};
-    for (int step = 0; step < length; ++step) {
-        std::vector<BeamPathInfo> candidates;
-        for (const auto& info : beam) {
-            uint64_t current = info.path.back();
-            std::unordered_set<uint64_t> adj;
-            graph_generic_func::_GetOutgoings(current, adj, sdbg);
-            for (uint64_t neighbor : adj) {
-                // Prevent cycles
-                if (std::find(info.path.begin(), info.path.end(), neighbor) == info.path.end()) {
-                    double mult = sdbg.EdgeMultiplicity(neighbor);
-                    auto new_path = info.path;
-                    new_path.push_back(neighbor);
-                    candidates.push_back({new_path, info.total_mult + mult});
+
+bool PhageCurator::RevalidateAllNodesButSingleton() {
+    
+    #pragma omp parallel for
+    for (uint64_t node = 0; node < sdbg.size(); ++node) {
+        
+        if (sdbg.EdgeMultiplicity(node) > 1 && !sdbg.IsValidEdge(node)) {
+            sdbg.SetValidEdge(node);
+        }
+    }
+    return true;
+}
+
+
+void PhageCurator::FindQualityPathsDLSFromGroupedPaths(int min_length, int max_length, const std::string& filename) {
+    std::ofstream out(filename, std::ios::app);  // Append mode to add to file
+    if (!out) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+    int path_count = 0;
+    for (const auto& [group_id, cycle_map] : grouped_paths) {
+        for (const auto& [cycle_id, paths_vec] : cycle_map) {
+            double avg = avg_spacers[cycle_id];
+            double min_mult = 0.9 * avg;
+            double max_mult = 1.10 * avg;
+            for (const auto& path : paths_vec) {
+                if (path.empty()) continue;
+                uint64_t start = path.back();
+                auto extended_paths = DepthLimitedPathsAvoiding(start, min_length, max_length, cycle_nodes);
+                for (const auto& ext_path : extended_paths) {
+                    // Check if all nodes in ext_path satisfy multiplicity conditions
+                    bool is_quality = true;
+                    for (uint64_t node : ext_path) {
+                        double mult = sdbg.EdgeMultiplicity(node);
+                        if (mult <= 1 || mult < min_mult || mult > max_mult) {
+                            is_quality = false;
+                            break;
+                        }
+                    }
+                    if (is_quality) {
+                        // Reconstruct the sequence
+                        string result_path = _FetchFirstNode(ext_path.front());
+                        for (size_t i = 1; i < ext_path.size(); ++i) {
+                            size_t node = ext_path[i];
+                            string last_base = _FetchNodeLastBase(node);
+                            result_path += last_base;
+                        }
+                        // Write to file
+                        out << ">quality_path_" << ++path_count << "\n" << result_path << "\n";
+                        // Print to console
+                        std::cout << "Found quality path " << path_count << " with length " << ext_path.size() << std::endl;
+                    }
                 }
             }
         }
-        // Keep only top beam_width candidates (max multiplicity)
-        std::sort(candidates.begin(), candidates.end(),
-                  [](const BeamPathInfo& a, const BeamPathInfo& b) { return a.total_mult > b.total_mult; });
-        if ((int)candidates.size() > beam_width) candidates.resize(beam_width);
-        beam = std::move(candidates);
-        if (beam.empty()) break;
     }
-    return beam;
+}
+
+std::vector<std::vector<uint64_t>> PhageCurator::BeamSearchPathsAvoiding(uint64_t start, int lower, int higher, const std::set<uint64_t>& forbidden, int beam_width, double min_mult, double max_mult, std::function<void(const std::vector<uint64_t>&)> path_callback) {
+    std::vector<std::vector<uint64_t>> all_paths;
+    if (!path_callback) {
+        all_paths.reserve(beam_width);  // Pre-allocate based on beam width
+    }
+
+    // Thread-local pools for paths, scores, and currents
+    static thread_local std::vector<std::vector<uint64_t>> path_pool;
+    static thread_local std::vector<double> score_pool;
+    static thread_local std::vector<uint64_t> current_pool;
+
+    // Clear pools
+    path_pool.clear();
+    score_pool.clear();
+    current_pool.clear();
+
+    // Reserve capacities based on beam width
+    if (path_pool.capacity() == 0) {
+        path_pool.reserve(beam_width + 64);
+    }
+    if (score_pool.capacity() == 0) {
+        score_pool.reserve(beam_width + 64);
+    }
+    if (current_pool.capacity() == 0) {
+        current_pool.reserve(beam_width + 64);
+    }
+
+    // Set for beam: stores {score, id}, ordered descending (begin() is highest score)
+    auto comp = std::greater<std::pair<double, size_t>>();
+    std::set<std::pair<double, size_t>, decltype(comp)> beam_set(comp);
+
+    size_t unique_id = 0;
+
+    // Initial path
+    double initial_mult = sdbg.EdgeMultiplicity(start);
+    if (initial_mult <= 1 || initial_mult < min_mult || initial_mult > max_mult) {
+        return all_paths;
+    }
+
+    path_pool.emplace_back(std::vector<uint64_t>{start});
+    path_pool.back().reserve(higher + 1);  // Pre-reserve for max depth
+    score_pool.push_back(initial_mult);
+    current_pool.push_back(start);
+
+    beam_set.insert({initial_mult, unique_id++});
+
+    while (!beam_set.empty()) {
+        // Pop the best (highest score)
+        auto it = beam_set.begin();
+        double score = it->first;
+        size_t id = it->second;
+        beam_set.erase(it);
+
+        auto& path = path_pool[id];
+        uint64_t v = current_pool[id];
+        int current_depth = static_cast<int>(path.size()) - 1;
+
+        if (current_depth >= lower && current_depth <= higher) {
+            if (path_callback) {
+                path_callback(path);
+            } else {
+                all_paths.push_back(path);
+            }
+            continue;  // Preserve original behavior: skip expansion after collection
+        }
+
+        // Early check for zero outdegree
+        if (sdbg.EdgeOutdegreeZero(v)) {
+            continue;
+        }
+
+        int outdegree = sdbg.EdgeOutdegree(v);
+        if (outdegree == 0 || !sdbg.IsValidEdge(v)) {
+            continue;
+        }
+
+        const int MAX_EDGE_COUNT = 4;
+        uint64_t neighbors[MAX_EDGE_COUNT];
+        int flag = sdbg.OutgoingEdges(v, neighbors);
+        if (flag == -1) {
+            continue;
+        }
+
+        __builtin_prefetch(&neighbors[0], 0, 1);
+
+        for (int i = 0; i < outdegree; ++i) {
+            uint64_t neighbor = neighbors[i];
+
+            // Cycle check in current path
+            if (std::find(path.begin(), path.end(), neighbor) != path.end()) {
+                continue;
+            }
+
+            // Forbidden check
+            if (forbidden.find(neighbor) != forbidden.end() && neighbor != start) {
+                continue;
+            }
+
+            // Multiplicity check for quality
+            double mult = sdbg.EdgeMultiplicity(neighbor);
+            if (mult <= 1 || mult < min_mult || mult > max_mult) {
+                continue;
+            }
+
+            // Create new entry in pools
+            size_t new_id = unique_id++;
+            path_pool.emplace_back(path);
+            path_pool.back().push_back(neighbor);
+            double new_score = (score * current_depth + mult) / (current_depth + 1);
+            uint64_t current = neighbor;
+            current_pool.push_back(current);
+            score_pool.push_back(new_score);
+
+            // Extend along simple path, preserving original logic
+            while (true) {
+                uint64_t next = sdbg.NextSimplePathEdge(current);
+                if (next == SDBG::kNullID || static_cast<int>(path_pool.back().size()) - 1 >= higher) {
+                    break;
+                }
+
+                // Cycle check
+                if (std::find(path_pool.back().begin(), path_pool.back().end(), next) != path_pool.back().end()) {
+                    break;
+                }
+
+                // Forbidden check
+                if (forbidden.find(next) != forbidden.end() && next != start) {
+                    break;
+                }
+
+                // Multiplicity check
+                double next_mult = sdbg.EdgeMultiplicity(next);
+                if (next_mult <= 1 || next_mult < min_mult || next_mult > max_mult) {
+                    break;
+                }
+
+                path_pool.back().push_back(next);
+                int new_depth = static_cast<int>(path_pool.back().size()) - 1;
+                new_score = (new_score * (new_depth - 1) + next_mult) / new_depth;
+                current = next;
+            }
+
+            // Update score and current
+            score_pool.back() = new_score;
+            current_pool.back() = current;
+
+            // Add to beam set
+            beam_set.insert({new_score, new_id});
+
+            // Prune the lowest score if over beam width
+            if (beam_set.size() > static_cast<size_t>(beam_width)) {
+                auto prune_it = beam_set.end();
+                --prune_it;
+                beam_set.erase(prune_it);
+            }
+
+            // Shrink if oversized
+            if (path_pool.back().capacity() > static_cast<size_t>((higher + 1) * 2)) {
+                path_pool.back().shrink_to_fit();
+            }
+        }
+    }
+
+    return all_paths;
+}
+
+std::string PhageCurator::_ReconstructPath(const std::vector<uint64_t>& path) {
+    if (path.empty()) return "";
+    std::string result = _FetchFirstNode(path.front());
+    for (size_t i = 1; i < path.size(); ++i) {
+        result += _FetchNodeLastBase(path[i]);
+    }
+    return result;
+}
+
+                    
+
+// New function using beam search, mirroring FindQualityPathsDLSFromGroupedPaths
+std::map<std::string,vector<string>> PhageCurator::FindQualityPathsBeamSearchFromGroupedPaths(int min_length, int max_length, const std::string& filename, int beam_width) {
+    std::ofstream out(filename, std::ios::app);  // Append mode to add to file
+    if (!out) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return {};
+    }
+    std::map<std::string,vector<string>> consensus_map;
+    int path_count = 0;
+    for (const auto& [group_id, cycle_map] : grouped_paths) {
+        std::vector<std::string> quality_paths;
+        for (const auto& [cycle_id, paths_vec] : cycle_map) {
+            
+            string final_path;
+            double avg = avg_spacers[cycle_id];
+            double min_mult = 0.5 * avg;
+            double max_mult = 2 * avg;
+            string local_quality_path;
+            vector<string> local_potential_paths;
+            for (const auto& path : paths_vec) {
+                string result_path;
+                if (path.empty()) continue;
+                uint64_t start = path.back();
+                auto extended_paths = BeamSearchPathsAvoiding(start, min_length, max_length, cycle_nodes, beam_width, min_mult, max_mult, nullptr);
+                for (const auto& ext_path : extended_paths) {
+                    // Reconstruct the sequence (same as original)
+                    result_path = _ReconstructPath(ext_path);
+                    std::cout << "Found quality path " << path_count << " with length " << ext_path.size() << std::endl;
+                }
+                local_potential_paths.push_back(result_path);
+                
+            }
+            local_quality_path = ComputeConsensusForCurrentGroup(local_potential_paths);
+            out << ">quality_path_" << local_quality_path.substr(0, 30) << "\n" << local_quality_path << "\n";
+            quality_paths.push_back(local_quality_path);
+        }
+        string group_id_str = _FetchFirstNode(group_id);
+        consensus_map[group_id_str] = quality_paths;
+    }
+    return consensus_map;
+}
+
+std::string PhageCurator::ComputeConsensusForCurrentGroup(vector<string> sequences) {
+    // use spoa to compute consensus
+    if (sequences.empty()) return "";
+    // Create a spoa::Graph object with the desired alignment parameters
+    spoa::Graph graph{};
+    auto alignment_engine = spoa::AlignmentEngine::Create(spoa::AlignmentType::kNW, 3, -5, -3);  // linear gaps
+    for (const auto& it : sequences) {
+        auto alignment = alignment_engine->Align(it, graph);
+        graph.AddAlignment(alignment, it);
+    }
+
+    auto consensus = graph.GenerateConsensus();
+
+    return consensus;
 }

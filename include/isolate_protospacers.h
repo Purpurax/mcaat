@@ -47,6 +47,9 @@ public:
     // Getters
     const IN_OUT_PAIR_MAP_SET& getProtospacerNodes() const { return protospacerNodes; }
     const std::map<uint64_t, std::set<uint64_t>>& getCycleNodes() const { return cycleNodes; }
+
+    
+    std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>> ReadPathsFromFile(const std::string& filename);
 };
 
 #endif
