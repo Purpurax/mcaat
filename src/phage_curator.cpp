@@ -564,33 +564,48 @@ std::map<std::string,vector<string>> PhageCurator::FindQualityPathsBeamSearchFro
     }
     std::map<std::string,vector<string>> consensus_map;
     int path_count = 0;
+    struct counts {
+        int first;
+        int second;
+        int third;
+    }
+    counts_by_nodes = {0,0,0};
     for (const auto& [group_id, cycle_map] : grouped_paths) {
         std::vector<std::string> quality_paths;
+        counts_by_nodes.first += 1;
         for (const auto& [cycle_id, paths_vec] : cycle_map) {
-            
+            counts_by_nodes.second +=1;
             string final_path;
             double avg = avg_spacers[cycle_id];
             double min_mult = 0.5 * avg;
             double max_mult = 2 * avg;
             string local_quality_path;
-            vector<string> local_potential_paths;
+            
             for (const auto& path : paths_vec) {
+                counts_by_nodes.third += 1;
+                vector<string> local_potential_paths;
                 string result_path;
                 if (path.empty()) continue;
                 uint64_t start = path.back();
                 auto extended_paths = BeamSearchPathsAvoiding(start, min_length, max_length, cycle_nodes, beam_width, min_mult, max_mult, nullptr);
                 for (const auto& ext_path : extended_paths) {
-                    // Reconstruct the sequence (same as original)
-                    result_path = _ReconstructPath(ext_path);
-                    std::cout << "Found quality path " << path_count << " with length " << ext_path.size() << std::endl;
+                   result_path = _FetchFirstNode(ext_path.front());
+                    for (size_t i = 1; i < ext_path.size(); ++i) {
+                        size_t node = ext_path[i];
+                        string last_base = _FetchNodeLastBase(node);
+                        result_path += last_base;
+                        
+                    }
+                    //std::cout << "Found quality path " << path_count << " with length " << ext_path.size() << std::endl;
+                    local_potential_paths.push_back(result_path);
                 }
-                local_potential_paths.push_back(result_path);
-                
+                local_quality_path = ComputeConsensusForCurrentGroup(local_potential_paths);
+                out << ">quality_path_" << local_quality_path.substr(0, 30) << "\n" << local_quality_path << "\n";
+                quality_paths.push_back(local_quality_path);
             }
-            local_quality_path = ComputeConsensusForCurrentGroup(local_potential_paths);
-            out << ">quality_path_" << local_quality_path.substr(0, 30) << "\n" << local_quality_path << "\n";
-            quality_paths.push_back(local_quality_path);
+
         }
+        std::cout<<"Processed counts:"<<counts_by_nodes.first<<","<<counts_by_nodes.second<<","<<counts_by_nodes.third<<std::endl;
         string group_id_str = _FetchFirstNode(group_id);
         consensus_map[group_id_str] = quality_paths;
     }
