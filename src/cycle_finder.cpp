@@ -483,7 +483,7 @@ int CycleFinder::FindApproximateCRISPRArrays()
     }
     std::cout << "Number of cycles: " << cumulative << endl;
     std::cout << "Number of nodes in results: " << this->results.size() << endl;
-
+    
     std::cout << endl;
     std::cout << "Number of Cycles: " << cumulative << endl;
     return cumulative;

@@ -47,7 +47,6 @@ public:
     std::vector<BeamPathInfo> BeamSearchPaths(uint64_t start, int length, int beam_width);
     std::vector<uint64_t> FindBestPathBeamFromGroupedPaths(int min_length, int beam_width);
     bool RevalidateAllNodesButSingleton();
-    void FindQualityPathsDLSFromGroupedPaths(int min_length, int max_length, const std::string& filename);
     std::vector<std::vector<uint64_t>> BeamSearchPathsAvoiding(uint64_t start, int lower, int higher, const std::set<uint64_t>& forbidden, int beam_width, double min_mult, double max_mult, std::function<void(const std::vector<uint64_t>&)> path_callback = nullptr);
     std::map<std::string,vector<string>> FindQualityPathsBeamSearchFromGroupedPaths(int min_length, int max_length, const std::string& filename, int beam_width);
     std::string ComputeConsensusForCurrentGroup(vector<string> sequences);

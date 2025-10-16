@@ -50,9 +50,9 @@ Filters::Filters(SDBG& sdbg, std::unordered_map<uint64_t, std::vector<std::vecto
 
     pair<vector<uint64_t>, vector<vector<uint64_t>>> Filters::_FindCRISPRArrayNodes(uint64_t start_node) {
         std::unordered_map<uint64_t, int> element_count;
-
+        string start_node_label = std::to_string(start_node);
         if (cycles.find(start_node) == cycles.end()) {
-            std::cerr << "Error: start_node not found in cycles." << std::endl;
+            std::cerr << "Logging: " << start_node_label << " has been removed from consideration" << std::endl;
             return {{}, {}};
         }
         auto data = cycles[start_node];

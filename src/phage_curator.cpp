@@ -17,6 +17,10 @@ PhageCurator::PhageCurator(SDBG& sdbg) : sdbg(sdbg) {
 
 PhageCurator::PhageCurator(SDBG& sdbg, const std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>>& grouped_paths, const std::unordered_map<uint64_t, std::vector<std::vector<uint64_t>>>& cycles)
     : sdbg(sdbg), grouped_paths(grouped_paths), cycles(cycles) {
+    bool validation = RevalidateAllNodesButSingleton();
+    if(validation){
+        std::cout << "Graph nodes have successfully been revalidated." << std::endl;
+    }
     for (const auto& [id, cycle] : cycles) {
         for (const auto& path : cycle) {
             for (uint64_t node : path) {
@@ -332,52 +336,6 @@ bool PhageCurator::RevalidateAllNodesButSingleton() {
     return true;
 }
 
-
-void PhageCurator::FindQualityPathsDLSFromGroupedPaths(int min_length, int max_length, const std::string& filename) {
-    std::ofstream out(filename, std::ios::app);  // Append mode to add to file
-    if (!out) {
-        std::cerr << "Error opening file: " << filename << std::endl;
-        return;
-    }
-    int path_count = 0;
-    for (const auto& [group_id, cycle_map] : grouped_paths) {
-        for (const auto& [cycle_id, paths_vec] : cycle_map) {
-            double avg = avg_spacers[cycle_id];
-            double min_mult = 0.9 * avg;
-            double max_mult = 1.10 * avg;
-            for (const auto& path : paths_vec) {
-                if (path.empty()) continue;
-                uint64_t start = path.back();
-                auto extended_paths = DepthLimitedPathsAvoiding(start, min_length, max_length, cycle_nodes);
-                for (const auto& ext_path : extended_paths) {
-                    // Check if all nodes in ext_path satisfy multiplicity conditions
-                    bool is_quality = true;
-                    for (uint64_t node : ext_path) {
-                        double mult = sdbg.EdgeMultiplicity(node);
-                        if (mult <= 1 || mult < min_mult || mult > max_mult) {
-                            is_quality = false;
-                            break;
-                        }
-                    }
-                    if (is_quality) {
-                        // Reconstruct the sequence
-                        string result_path = _FetchFirstNode(ext_path.front());
-                        for (size_t i = 1; i < ext_path.size(); ++i) {
-                            size_t node = ext_path[i];
-                            string last_base = _FetchNodeLastBase(node);
-                            result_path += last_base;
-                        }
-                        // Write to file
-                        out << ">quality_path_" << ++path_count << "\n" << result_path << "\n";
-                        // Print to console
-                        std::cout << "Found quality path " << path_count << " with length " << ext_path.size() << std::endl;
-                    }
-                }
-            }
-        }
-    }
-}
-
 std::vector<std::vector<uint64_t>> PhageCurator::BeamSearchPathsAvoiding(uint64_t start, int lower, int higher, const std::set<uint64_t>& forbidden, int beam_width, double min_mult, double max_mult, std::function<void(const std::vector<uint64_t>&)> path_callback) {
     std::vector<std::vector<uint64_t>> all_paths;
     if (!path_callback) {
@@ -600,15 +558,18 @@ std::map<std::string,vector<string>> PhageCurator::FindQualityPathsBeamSearchFro
                     local_potential_paths.push_back(result_path);
                 }
                 local_quality_path = ComputeConsensusForCurrentGroup(local_potential_paths);
+                if (local_quality_path.empty()) continue;
                 out << ">quality_path_" << local_quality_path.substr(0, 30) << "\n" << local_quality_path << "\n";
                 quality_paths.push_back(local_quality_path);
             }
 
         }
-        std::cout<<"Processed counts:"<<counts_by_nodes.first<<","<<counts_by_nodes.second<<","<<counts_by_nodes.third<<std::endl;
+        std::cout<<"Processed counts:"<<counts_by_nodes.first<<","<<counts_by_nodes.second<<","<<counts_by_nodes.third<<";";
         string group_id_str = _FetchFirstNode(group_id);
         consensus_map[group_id_str] = quality_paths;
     }
+    std::cout << "\nSaved in " << filename << std::endl;
+    out.close();
     return consensus_map;
 }
 
@@ -622,8 +583,6 @@ std::string PhageCurator::ComputeConsensusForCurrentGroup(vector<string> sequenc
         auto alignment = alignment_engine->Align(it, graph);
         graph.AddAlignment(alignment, it);
     }
-
     auto consensus = graph.GenerateConsensus();
-
     return consensus;
 }
