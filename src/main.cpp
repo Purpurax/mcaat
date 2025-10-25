@@ -647,22 +647,12 @@ int main(int argc, char** argv) {
             const auto sequence_similarity = get_string_similarity(
                 sequence, expected_sequence
             );
-            vector<float> spacer_similarity = {0.0, 0.0, 0.0};
-            for (int variant = 0; variant < 3; ++variant) {
-                spacer_similarity[variant] = get_spacer_order_similarity(
-                    spacers, expected_sequence, variant
-                );
-            }
-
             const auto amount_of_duplicate_spacers = get_number_of_duplicate_spacers(
                 spacers, expected_sequence
             );
 
             cout << "    ▸ ≥" << std::fixed << std::setprecision(2);
             cout << (sequence_similarity * 100) << "% sequence similarity, ";
-            cout << (spacer_similarity[0] * 100) << "% spacer similarity variant 0, ";
-            cout << (spacer_similarity[1] * 100) << "% spacer similarity variant 1, ";
-            cout << (spacer_similarity[2] * 100) << "% spacer similarity variant 2, ";
             cout << "with ";
             cout << spacers.size() << " spacers, ";
             cout << amount_of_duplicate_spacers << " duplicate spacers, confidence of cycle resolution: ";
