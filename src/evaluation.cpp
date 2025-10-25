@@ -1,5 +1,52 @@
 #include "evaluation.h"
 
+uint16_t get_levenshtein_distance(const string& s1, const string& s2) {
+    vector<vector<uint16_t>> dist;
+
+    /* Setup matrix dist */
+    vector<uint16_t> first_row;
+    for (int i = 0; i < s1.size() + 1; ++i) {
+        first_row.push_back(i);
+    }
+    dist.push_back(first_row);
+
+    for (int i = 1; i < s2.size() + 1; ++i) {
+        vector<uint16_t> row;
+        row.push_back(i);
+        dist.push_back(row);
+    }
+
+    /* Fill matrix with computation */
+    for (int x = 1; x < s1.size() + 1; ++x) {
+        for (int y = 1; y < s2.size() + 1; ++y) {
+            char s1_char = s1.at(x - 1);
+            char s2_char = s2.at(y - 1);
+
+            uint16_t min;
+            if (s1_char == s2_char) { // No extra distance
+                min = dist.at(y - 1).at(x - 1);
+            } else { // update(s1_char, s2_char)
+                min = dist.at(y - 1).at(x - 1) + 1;
+            }
+
+            uint16_t insert_cost = dist.at(y).at(x - 1) + 1;
+            if (min > insert_cost) { // insert(s1_char)
+                min = insert_cost;
+            }
+
+            uint16_t delete_cost = dist.at(y - 1).at(x) + 1;
+            if (min > delete_cost) { // delete()
+                min = delete_cost;
+            }
+
+            dist.at(y).push_back(min);
+        }
+    }
+
+    /* Return result of matrix */
+    return dist.at(s2.size()).at(s1.size());
+}
+
 float get_string_similarity(const string& s1, const string& s2) {
     uint16_t d = get_levenshtein_distance(s1, s2);
     size_t max_size = s1.size() > s2.size() ? s1.size() : s2.size();
