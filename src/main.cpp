@@ -675,6 +675,52 @@ int main(int argc, char** argv) {
         cout << std::fixed << std::setprecision(2);
         cout << std::chrono::duration<double>(end_time - start_time).count();
         cout << " seconds" << endl;
+    } else {
+        cout << "\n══════════════════════════════════════════════" << endl;
+        cout << "🔸STEP 8: Results" << endl;
+        cout << "══════════════════════════════════════════════" << endl;
+        cout << "Each result has their own confidence score that can give ";
+        cout << "some guidance of how accurate the prediction is." << endl;
+        cout << "Take these predictions with a grain of salt:" << endl;
+        cout << "  🔴: Many uncertainties, ";
+        cout << "e.g. no clear repeat sequence, high spacer contradictions" << endl;
+        cout << "  🟠: Some uncertainties, ";
+        cout << "e.g. some spacer positions are unclear and were intuitively guessed" << endl;
+        cout << "  🟡: Minor uncertainties, ";
+        cout << "e.g. ";
+        cout << "  🟢: Highly confident with the result" << endl;
+        cout << endl;
+        cout << "----------------------------------------------" << endl;
+
+        int red = 0;
+        int orange = 0;
+        int yellow = 0;
+        int green = 0;
+        for (const auto& [sequence, repeat, spacers, confidence_cycle_resolution, confidence_topological_sort] : found_systems) {
+            if (repeat.size() <= 23 || confidence_cycle_resolution < 0.5 || confidence_topological_sort < 0.5) {
+                cout << "  🔴 ";
+                ++red;
+            } else if (confidence_cycle_resolution < 0.75 || confidence_topological_sort < 0.75) {
+                cout << "  🟠 ";
+                ++orange;
+            } else if (confidence_cycle_resolution < 0.85 || confidence_topological_sort < 0.85) {
+                cout << "  🟡 ";
+                ++yellow;
+            } else {
+                cout << "  🟢 ";
+                ++green;
+            }
+
+            cout << "repeat: " << repeat << ", sequence: " << sequence << endl;
+        }
+
+        const int total = red + orange + yellow + green;
+        cout << endl;
+        cout << "  ▸ " << found_systems.size() << " CRISPR Arrays were found with ";
+        cout << "🔴 (" << red << "/" << total << "), ";
+        cout << "🟠 (" << orange << "/" << total << "), ";
+        cout << "🟡 (" << yellow << "/" << total << "), ";
+        cout << "🟢 (" << green << "/" << total << ")" << endl;
     }
     
     cout << "══════════════════════════════════════════════" << endl;
