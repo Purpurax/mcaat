@@ -1,81 +1,80 @@
 #include "spacer_ordering.h"
 
-class TarjanSCC {
-private:
-    const SDBG& sdbg;
+void find_strongly_connected_components_dfs(
+    const uint64_t node,
+    const SDBG& sdbg,
+    unordered_map<uint64_t, int>& index_map,
+    unordered_map<uint64_t, int>& lowlink_map,
+    unordered_set<uint64_t>& on_stack,
+    std::stack<uint64_t>& stack,
+    vector<vector<uint64_t>>& components,
+    int& index_counter
+) {
+    index_map[node] = index_counter;
+    lowlink_map[node] = index_counter;
+    index_counter++;
+    stack.push(node);
+    on_stack.insert(node);
+
+    // Get outgoing edges
+    int outdegree = sdbg.EdgeOutdegree(node);
+    if (outdegree > 0) {
+        uint64_t* outgoings = new uint64_t[outdegree];
+        if (sdbg.OutgoingEdges(node, outgoings) != -1) {
+            for (int i = 0; i < outdegree; ++i) {
+                const uint64_t neighbor = outgoings[i];
+                if (!sdbg.IsValidEdge(neighbor)) continue;
+                
+                if (index_map.find(neighbor) == index_map.end()) {
+                    find_strongly_connected_components_dfs(neighbor, sdbg, index_map, lowlink_map, on_stack, stack, components, index_counter);
+                    lowlink_map[node] = std::min(lowlink_map[node], lowlink_map[neighbor]);
+                } else if (on_stack.find(neighbor) != on_stack.end()) {
+                    lowlink_map[node] = std::min(lowlink_map[node], index_map[neighbor]);
+                }
+            }
+        }
+        delete[] outgoings;
+    }
+
+    if (lowlink_map[node] == index_map[node]) {
+        vector<uint64_t> component;
+        uint64_t w;
+        do {
+            w = stack.top();
+            stack.pop();
+            on_stack.erase(w);
+            component.push_back(w);
+        } while (w != node);
+
+        if (component.size() > 1) {
+            components.push_back(component);
+        }
+    }
+}
+
+vector<vector<uint64_t>> find_strongly_connected_components(const SDBG& sdbg) {
     unordered_map<uint64_t, int> index_map;
     unordered_map<uint64_t, int> lowlink_map;
     unordered_set<uint64_t> on_stack;
     std::stack<uint64_t> stack;
     vector<vector<uint64_t>> components;
-    int index_counter;
+    int index_counter = 0;
 
-    void strongconnect(const uint64_t node) {
-        index_map[node] = index_counter;
-        lowlink_map[node] = index_counter;
-        index_counter++;
-        stack.push(node);
-        on_stack.insert(node);
-
-        // Get outgoing edges
-        int outdegree = sdbg.EdgeOutdegree(node);
-        if (outdegree > 0) {
-            uint64_t* outgoings = new uint64_t[outdegree];
-            if (sdbg.OutgoingEdges(node, outgoings) != -1) {
-                for (int i = 0; i < outdegree; ++i) {
-                    const uint64_t neighbor = outgoings[i];
-                    if (!sdbg.IsValidEdge(neighbor)) continue;
-                    
-                    if (index_map.find(neighbor) == index_map.end()) {
-                        strongconnect(neighbor);
-                        lowlink_map[node] = std::min(lowlink_map[node], lowlink_map[neighbor]);
-                    } else if (on_stack.find(neighbor) != on_stack.end()) {
-                        lowlink_map[node] = std::min(lowlink_map[node], index_map[neighbor]);
-                    }
-                }
-            }
-            delete[] outgoings;
-        }
-
-        // If node is a root node, pop the stack and create an SCC
-        if (lowlink_map[node] == index_map[node]) {
-            vector<uint64_t> component;
-            uint64_t w;
-            do {
-                w = stack.top();
-                stack.pop();
-                on_stack.erase(w);
-                component.push_back(w);
-            } while (w != node);
-            
-            if (component.size() > 1) { // Only keep non-trivial components
-                components.push_back(component);
-            }
+    vector<uint64_t> valid_nodes;
+    for (uint64_t node = 0; node < sdbg.size(); ++node) {
+        if (sdbg.IsValidEdge(node)) {
+            valid_nodes.push_back(node);
         }
     }
 
-public:
-    TarjanSCC(const SDBG& graph) : sdbg(graph), index_counter(0) {}
-
-    vector<vector<uint64_t>> find_components() {
-        // Find all valid nodes first
-        vector<uint64_t> valid_nodes;
-        for (uint64_t node = 0; node < sdbg.size(); ++node) {
-            if (sdbg.IsValidEdge(node)) {
-                valid_nodes.push_back(node);
-            }
+    for (const uint64_t node : valid_nodes) {
+        if (index_map.find(node) == index_map.end()) {
+            find_strongly_connected_components_dfs(node, sdbg, index_map, lowlink_map, on_stack, stack, components, index_counter);
         }
-
-        // Run Tarjan's algorithm on all unvisited valid nodes
-        for (const uint64_t node : valid_nodes) {
-            if (index_map.find(node) == index_map.end()) {
-                strongconnect(node);
-            }
-        }
-
-        return components;
     }
-};
+
+    return components;
+}
 
 void keep_crispr_regions_extended_by_k(
     SDBG& sdbg,
@@ -90,7 +89,7 @@ void keep_crispr_regions_extended_by_k(
     }
 
     // Extend cycle_edges by k
-    int loop_counter = 0;
+    size_t loop_counter = 0;
     while (loop_counter < k) {
         ++loop_counter;
         vector<uint64_t> new_edges;
@@ -143,8 +142,7 @@ void keep_crispr_regions_extended_by_k(
 vector<Graph> divide_graph_into_subgraphs(const SDBG& sdbg) {
     vector<Graph> subgraphs;
     
-    TarjanSCC tarjan(sdbg);
-    auto components = tarjan.find_components();
+    auto components = find_strongly_connected_components(sdbg);
     
     for (size_t comp_idx = 0; comp_idx < components.size(); ++comp_idx) {
         const auto& component = components[comp_idx];
@@ -381,13 +379,13 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints_from_read(
 
     // Merge common neighbors: A,A,B,C,C,C -> A,B,C
     vector<uint32_t> cycle_indices_merged;
-    uint32_t last_cycle_index;
-    for (int i = 0; i < cycle_indices_in_order.size(); ++i) {
+    optional<uint32_t> last_cycle_index;
+    for (size_t i = 0; i < cycle_indices_in_order.size(); ++i) {
         const uint32_t cycle_index = cycle_indices_in_order.at(i);
 
-        if (i == 0 || cycle_index != last_cycle_index) {
+        if (i == 0 || !last_cycle_index || cycle_index != *last_cycle_index) {
             cycle_indices_merged.push_back(cycle_index);
-            last_cycle_index = cycle_index;
+            last_cycle_index = std::make_optional(cycle_index);
         }
     }
 
@@ -430,13 +428,13 @@ vector<tuple<uint32_t, uint32_t>> generate_out_of_cycles_constraints_from_read(
 
     // Merge common neighbors: A,A,B,C,C,C -> A,B,C
     vector<uint32_t> cycle_indices_merged;
-    uint32_t last_cycle_index;
-    for (int i = 0; i < cycle_indices_in_order.size(); ++i) {
+    optional<uint32_t> last_cycle_index;
+    for (size_t i = 0; i < cycle_indices_in_order.size(); ++i) {
         const uint32_t cycle_index = cycle_indices_in_order.at(i);
 
-        if (i == 0 || cycle_index != last_cycle_index) {
+        if (i == 0 || !last_cycle_index || cycle_index != *last_cycle_index) {
             cycle_indices_merged.push_back(cycle_index);
-            last_cycle_index = cycle_index;
+            last_cycle_index = std::make_optional(cycle_index);
         }
     }
 
@@ -609,7 +607,7 @@ void apply_topological_sort(
     float best_heuristic_value = std::numeric_limits<float>::lowest();
     float total_heuristic_value_summed = 0.0;
     
-    for (int i = 0; i < possible_start_nodes.size(); ++i) {
+    for (size_t i = 0; i < possible_start_nodes.size(); ++i) {
         const uint32_t node = possible_start_nodes[i];
         const float current_affection = static_cast<float>(node_affection_to_start.at(node));
         const float current_other_heuristic_value = static_cast<float>(heuristic_node_values.at(node));
@@ -653,7 +651,6 @@ void apply_topological_sort(
     for (const auto& start_node_candidate : start_node_candidates) {
         bool has_other_incoming = false;
         for (const auto& [edge, _weight] : edges) {
-            const auto from = std::get<0>(edge);
             const auto to = std::get<1>(edge);
 
             if (to == start_node_candidate) {

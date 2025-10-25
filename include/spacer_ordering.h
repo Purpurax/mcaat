@@ -78,6 +78,44 @@ struct TupleHash {
 
 /**
  * @internal
+ * @brief Helper function for finding the strongly connected components
+ * 
+ * This uses the Tarjan's algorithm
+ * 
+ * @param node 
+ * @param sdbg 
+ * @param index_map 
+ * @param lowlink_map 
+ * @param on_stack 
+ * @param stack 
+ * @param components 
+ * @param index_counter 
+ */
+void find_strongly_connected_components_dfs(
+    const uint64_t node,
+    const SDBG& sdbg,
+    unordered_map<uint64_t, int>& index_map,
+    unordered_map<uint64_t, int>& lowlink_map,
+    unordered_set<uint64_t>& on_stack,
+    std::stack<uint64_t>& stack,
+    vector<vector<uint64_t>>& components,
+    int& index_counter
+);
+
+/**
+ * @internal
+ * @brief Finds all strongly connected components of the SDBG graph
+ * 
+ * A strongly connected component is a maximal subgraph in which each node is
+ * reachable by each other node.
+ * 
+ * @param sdbg 
+ * @return Strongly connected components (vector<vector<uint64_t>>)
+ */
+vector<vector<uint64_t>> find_strongly_connected_components(const SDBG& sdbg);
+
+/**
+ * @internal
  * @brief Reduces the succinct de bruijn graphs edges to only have edges
  * that can be found in the cycles (and others with a distance of k)
  * 
