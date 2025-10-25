@@ -479,105 +479,83 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints(
     return constraints;
 }
 
-bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges) {
-    unordered_set<uint32_t> visited;
-    unordered_set<uint32_t> rec_stack;
+vector<tuple<uint32_t, uint32_t>> get_maximal_spanning_tree(
+    const vector<tuple<uint32_t, uint32_t>>& edges
+) {
+    unordered_map<uint32_t, uint32_t> parent;
+    unordered_map<uint32_t, int> rank;
 
-    std::function<bool(uint32_t)> dfs = [&](uint32_t node) {
-        if (rec_stack.count(node)) return true;
-        if (visited.count(node)) return false;
-        visited.insert(node);
-        rec_stack.insert(node);
-        auto it = edges.find(node);
-        if (it != edges.end()) {
-            for (uint32_t neighbor : it->second) {
-                if (dfs(neighbor)) return true;
-            }
+    function<uint32_t(uint32_t)> find = [&](uint32_t x) {
+        if (parent.find(x) == parent.end()) {
+            parent[x] = x;
+            rank[x] = 0;
         }
-        rec_stack.erase(node);
-        return false;
+        if (parent[x] != x) {
+            parent[x] = find(parent[x]);
+        }
+        return parent[x];
     };
 
-    for (const auto& [node, _] : edges) {
-        if (dfs(node)) return true;
-    }
-    return false;
-}
+    auto union_sets = [&](uint32_t x, uint32_t y) -> bool {
+        uint32_t root_x = find(x);
+        uint32_t root_y = find(y);
+        
+        if (root_x == root_y) {
+            return false; // Would create cycle
+        }
+        
+        if (rank[root_x] < rank[root_y]) {
+            parent[root_x] = root_y;
+        } else if (rank[root_x] > rank[root_y]) {
+            parent[root_y] = root_x;
+        } else {
+            parent[root_y] = root_x;
+            rank[root_x]++;
+        }
+        return true;
+    };
 
-pair<tuple<uint32_t, uint32_t>, int> resolve_cycles_greedy_best_edge(
-    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
-) {
-    tuple<uint32_t, uint32_t> best_edge;
-    int min_weight = std::numeric_limits<int>::max();
+
+    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
+    for (const auto& edge : edges) {
+        edges_with_weights[edge]++;
+    }
+
+    vector<pair<int, tuple<uint32_t, uint32_t>>> sorted_edges;
     for (const auto& [edge, weight] : edges_with_weights) {
-        if (weight < min_weight) {
-            min_weight = weight;
-            best_edge = edge;
+        sorted_edges.push_back({weight, edge});
+    }
+    sort(sorted_edges.begin(), sorted_edges.end(), greater<pair<int, tuple<uint32_t, uint32_t>>>());
+    
+    vector<tuple<uint32_t, uint32_t>> mst_edges;
+    for (const auto& [weight, edge] : sorted_edges) {
+        const uint32_t from = std::get<0>(edge);
+        const uint32_t to = std::get<1>(edge);
+        
+        if (union_sets(from, to)) {
+            mst_edges.push_back(edge);
         }
     }
 
-    return std::make_pair(best_edge, min_weight);
+    return mst_edges;
 }
 
 void resolve_cycles_greedy(
     vector<tuple<uint32_t, uint32_t>>& constraints,
     unordered_map<uint32_t, int>& heuristic_node_values
 ) {
-    unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash> edges_with_weights;
-    unordered_map<uint32_t, vector<uint32_t>> edges;
-    for (const auto& constraint : constraints) {
-        const uint32_t from = std::get<0>(constraint);
-        const uint32_t to = std::get<1>(constraint);
-        
-        if (from == NOT_IN_ANY_CYCLE_INDEX || to == NOT_IN_ANY_CYCLE_INDEX) {
-            continue;
-        }
-
-        edges_with_weights[constraint]++;
-        edges[from].push_back(to);
-    }
-
-    // // Debug-help: To display edges as graph in .dot file
-    // std::cout << "digraph G {" << std::endl;
-    // for (const auto& [edge, weight] : edges_with_weights) {
-    //     std::cout << "    " << std::get<0>(edge) << " -> " << std::get<1>(edge)
-    //               << " [label=\"" << weight << "\"];" << std::endl;
-    // }
-    // std::cout << "}" << std::endl;
-
-    vector<tuple<uint32_t, uint32_t>> removed_edges;
-
-    while (has_cycle(edges)) {
-        const auto result = resolve_cycles_greedy_best_edge(edges_with_weights);
-        const auto edge_to_remove = std::get<0>(result);
-        const auto weight_of_edge = std::get<1>(result);
-
-        const uint32_t from = std::get<0>(edge_to_remove);
-        const uint32_t to = std::get<1>(edge_to_remove);
-
-        heuristic_node_values[to] -= weight_of_edge;
-
-        removed_edges.push_back(edge_to_remove);
-        edges_with_weights.erase(edge_to_remove);
-        
-        auto it = edges.find(from);
-        if (it != edges.end()) {
-            auto& vec = it->second;
-            vec.erase(std::remove(vec.begin(), vec.end(), to), vec.end());
-            if (vec.empty()) {
-                edges.erase(it);
-            }
-        }
-    }
-
-    const unordered_set<tuple<uint32_t, uint32_t>, TupleHash> removed_set(
-        removed_edges.begin(),
-        removed_edges.end()
-    );
+    const auto& mst_edges_vec = get_maximal_spanning_tree(constraints);
+    const unordered_set<tuple<uint32_t, uint32_t>, TupleHash> mst_edges(mst_edges_vec.begin(), mst_edges_vec.end());
     
     vector<tuple<uint32_t, uint32_t>> filtered_constraints;
     for (const auto& constraint : constraints) {
-        if (removed_set.find(constraint) == removed_set.end()) {
+        const uint32_t from = std::get<0>(constraint);
+        const uint32_t to = std::get<1>(constraint);
+
+        const bool is_removed_edge = mst_edges.find(constraint) == mst_edges.end();
+        if (is_removed_edge && from != NOT_IN_ANY_CYCLE_INDEX && to != NOT_IN_ANY_CYCLE_INDEX) {
+            heuristic_node_values[to] -= 1;
+        } else {
             filtered_constraints.push_back(constraint);
         }
     }

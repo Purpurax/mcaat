@@ -19,6 +19,7 @@
 #define INCLUDE_SPACER_ORDERING_H_
 
 #include <unordered_set>
+#include <queue>
 #include <stack>
 #include <algorithm>
 
@@ -343,37 +344,21 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints(
 
 /**
  * @internal
- * @brief Checks whether the edges have some cycle
+ * @brief Get the maximal spanning tree for some edges
  * 
- * @param edges as an adjecency list
- * 
- * @return true If a cycle exists
- * @return false If no cycle was found
+ * @param edges_with_weights 
+ * @return vector<tuple<uint32_t, uint32_t>> 
  */
-bool has_cycle(const unordered_map<uint32_t, vector<uint32_t>>& edges);
-
-/**
- * @internal
- * @brief Returns the edge with the minimum weight and its confidence that it will resolve the cycles
- * 
- * @todo outdated doc
- * 
- * The edge with the smallest weight will be returned.
- * The confidence is just the relative weight amount compared to the total weight
- * 
- * @post 0.0 <= confidence <= 1.0
- * 
- * @param edges_with_weights Used for the edge_weight
- * 
- * @return Best edge (tuple<uint32_t, uint32_t>) and confidence (float)
- */
-pair<tuple<uint32_t, uint32_t>, int> resolve_cycles_greedy_best_edge(
+vector<tuple<uint32_t, uint32_t>> get_maximal_spanning_tree(
     const unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
 );
 
 /**
  * @internal
  * @brief Resolves any cycles caused when viewing constraints as edges
+ * 
+ * Uses the Kruskal minimal spanning tree to find edges that cause cycles
+ * and have the lowest weight
  * 
  * @post Removes constraints that lead to cycles
  * 
