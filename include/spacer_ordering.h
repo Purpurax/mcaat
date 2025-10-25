@@ -44,7 +44,7 @@ struct Graph {
      * @param from
      * @param to
      */
-    void add_edge(uint64_t from, uint64_t to) {
+    void add_edge(const uint64_t from, const uint64_t to) {
         adjacency_list[from].push_back(to);
         nodes.insert(from);
         nodes.insert(to);

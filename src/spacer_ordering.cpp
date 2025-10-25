@@ -16,7 +16,6 @@ void find_strongly_connected_components_dfs(
     stack.push(node);
     on_stack.insert(node);
 
-    // Get outgoing edges
     int outdegree = sdbg.EdgeOutdegree(node);
     if (outdegree > 0) {
         uint64_t* outgoings = new uint64_t[outdegree];
@@ -391,6 +390,7 @@ vector<tuple<uint32_t, uint32_t>> generate_constraints_from_read(
 
     return every_possible_combination(cycle_indices_in_order);
 
+    // Only have direct neighbors (through benchmarking it led to worse results)
     // vector<tuple<uint32_t, uint32_t>> derived_constraints;
     // for (int i = 0; i < cycle_indices_merged.size() - 1; ++i) {
     //     const uint32_t cycle_index = cycle_indices_merged.at(i);
@@ -508,18 +508,13 @@ pair<tuple<uint32_t, uint32_t>, int> resolve_cycles_greedy_best_edge(
     unordered_map<tuple<uint32_t, uint32_t>, int, TupleHash>& edges_with_weights
 ) {
     tuple<uint32_t, uint32_t> best_edge;
-    int total_weight = 0;
     int min_weight = std::numeric_limits<int>::max();
     for (const auto& [edge, weight] : edges_with_weights) {
-        total_weight += weight;
         if (weight < min_weight) {
             min_weight = weight;
             best_edge = edge;
         }
     }
-
-    // float confidence = static_cast<float>(total_weight - min_weight);
-    // confidence /= static_cast<float>(total_weight);
 
     return std::make_pair(best_edge, min_weight);
 }
@@ -542,7 +537,7 @@ void resolve_cycles_greedy(
         edges[from].push_back(to);
     }
 
-    // // Debug-help: To display edges as graph
+    // // Debug-help: To display edges as graph in .dot file
     // std::cout << "digraph G {" << std::endl;
     // for (const auto& [edge, weight] : edges_with_weights) {
     //     std::cout << "    " << std::get<0>(edge) << " -> " << std::get<1>(edge)
@@ -612,7 +607,7 @@ void apply_topological_sort(
         const float current_affection = static_cast<float>(node_affection_to_start.at(node));
         const float current_other_heuristic_value = static_cast<float>(heuristic_node_values.at(node));
 
-        // apply good heuristic weight here
+        // Apply good heuristic weight here
         const float current_heuristic_value = current_affection * 1.0 + current_other_heuristic_value;
         if (current_heuristic_value >= best_heuristic_value) {
             best_heuristic_value = current_heuristic_value;
