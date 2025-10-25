@@ -19,3 +19,6 @@
 [submodule "libs/rapidfuzz-cpp"]
 	path = libs/rapidfuzz-cpp
 	url = https://github.com/rapidfuzz/rapidfuzz-cpp.git
+[submodule "libs/spoa"]
+	path = libs/spoa
+	url = https://github.com/rvaser/spoa.git

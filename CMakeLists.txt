@@ -68,6 +68,16 @@ include_directories(libs/megahit/src)
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
 include_directories(${phmap_SOURCE_DIR})
+include_directories(libs/spoa)
+
+# Configure spoa options (disable exe and tests to build only the library)
+set(spoa_build_exe OFF CACHE BOOL "Disable spoa executable build" FORCE)
+set(spoa_build_tests OFF CACHE BOOL "Disable spoa tests build" FORCE)
+set(spoa_use_cereal OFF CACHE BOOL "Disable cereal dependency" FORCE)  # Optional: Skip serialization if not needed
+set(spoa_use_simde OFF CACHE BOOL "Disable SIMDe for simplicity" FORCE)  # Optional: Skip SIMD if not needed
+
+# Add spoa subdirectory (builds the library)
+add_subdirectory(libs/spoa)
 
 # Include fmt
 include(FetchContent)
@@ -93,6 +103,7 @@ file(GLOB_RECURSE CX1_SOURCE "libs/megahit/src/sorting/*.cpp")
 file(GLOB_RECURSE SEQ_SOURCE "libs/megahit/src/sequence/*.cpp")
 file(GLOB_RECURSE TOOLKIT_SOURCE "libs/megahit/src/tools/*.cpp")
 file(GLOB_RECURSE PROGRESSBAR_SOURCE "libs/progressbar/include/*.hpp")
+
 
 # Additional source files
 list(APPEND OTHER_SOURCE
@@ -159,7 +170,8 @@ if (STATIC_BUILD)
 endif (STATIC_BUILD)
 
 # Link libraries
-target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz fmt::fmt)
+target_link_libraries(mcaat PRIVATE ${ZLIB_LIBRARIES} rapidfuzz::rapidfuzz spoa::spoa fmt::fmt)
+
 
 # Threading configuration
 if(THREADS_HAVE_PTHREAD_ARG)

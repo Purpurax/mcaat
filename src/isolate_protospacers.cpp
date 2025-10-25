@@ -99,23 +99,6 @@ IN_OUT_PAIR_MAP_SET IsolateProtospacers::IsolateProtospacersMethod() {
             outgoingOutersMap[k] = outgoingOuters;
         }
     }
-    //print all the incomingOutersMap and outgoingOutersMap
-    std::cout << "Identified " << incomingOutersMap.size() << " cycles with incoming protospacer nodes." << std::endl;
-    std::cout << "Identified " << outgoingOutersMap.size() << " cycles with outgoing protospacer nodes." << std::endl;
-    for (const auto& [cycleId, nodes] : incomingOutersMap) {
-        std::cout << "Cycle " << cycleId << " incoming protospacer nodes: ";
-        for (uint64_t node : nodes) {
-            std::cout << node << " ";
-        }
-        std::cout << std::endl;
-    }
-    for (const auto& [cycleId, nodes] : outgoingOutersMap) {
-        std::cout << "Cycle " << cycleId << " outgoing protospacer nodes: ";
-        for (uint64_t node : nodes) {
-            std::cout << node << " ";
-        }
-        std::cout << std::endl;
-    }
 
     return {incomingOutersMap, outgoingOutersMap};
 }
@@ -173,7 +156,6 @@ std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>> Isola
     
     auto [possibleInProtospacerNodes, possibleOutProtospacerNodes] = FilterSharedGroups(inGroup, outGroup);
     //print first values of the maps
-    std::cout << "After filtering, we have " << possibleOutProtospacerNodes.size() << " cycles with both incoming and outgoing protospacer nodes." << std::endl;
     
     
     std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>> groupedPaths;
@@ -335,4 +317,74 @@ void IsolateProtospacers::WritePathsToFile(const std::map<uint64_t, std::map<uin
     }
 
     file.close();
+}
+
+
+std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>> IsolateProtospacers::ReadPathsFromFile(const std::string& filename) {
+    std::map<uint64_t, std::map<uint64_t, std::vector<std::vector<uint64_t>>>> paths;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return paths;
+    }
+
+    std::string line;
+    uint64_t current_group = 0;
+    uint64_t current_cycle = 0;
+    while (std::getline(file, line)) {
+        // Remove trailing whitespace
+        line.erase(line.find_last_not_of(" \t\r\n") + 1);
+        if (line.empty()) continue;
+
+        if (line.find("Group ") == 0) {
+            // Parse "Group <id>:"
+            size_t pos = line.find(" ");
+            if (pos != std::string::npos) {
+                std::string id_str = line.substr(pos + 1);
+                if (!id_str.empty() && id_str.back() == ':') {
+                    id_str.pop_back();
+                    try {
+                        current_group = std::stoull(id_str);
+                    } catch (const std::invalid_argument&) {
+                        std::cerr << "Invalid group ID: " << id_str << std::endl;
+                        continue;
+                    }
+                }
+            }
+        } else if (line.find("  Cycle ") == 0) {
+            // Parse "  Cycle <id>:"
+            size_t pos = line.find("Cycle ");
+            if (pos != std::string::npos) {
+                std::string id_str = line.substr(pos + 6);  // "Cycle " is 6 chars
+                if (!id_str.empty() && id_str.back() == ':') {
+                    id_str.pop_back();
+                    try {
+                        current_cycle = std::stoull(id_str);
+                    } catch (const std::invalid_argument&) {
+                        std::cerr << "Invalid cycle ID: " << id_str << std::endl;
+                        continue;
+                    }
+                }
+            }
+        } else if (line.find_first_not_of(" \t") != std::string::npos) {
+            // Parse path line: "<number>    [<nodes>]"
+            size_t bracket_start = line.find('[');
+            size_t bracket_end = line.find(']');
+            if (bracket_start != std::string::npos && bracket_end != std::string::npos && bracket_end > bracket_start) {
+                std::string nodes_str = line.substr(bracket_start + 1, bracket_end - bracket_start - 1);
+                std::vector<uint64_t> path;
+                std::stringstream ss(nodes_str);
+                uint64_t node;
+                while (ss >> node) {
+                    path.push_back(node);
+                }
+                if (!path.empty()) {
+                    paths[current_group][current_cycle].push_back(path);
+                }
+            }
+        }
+    }
+
+    file.close();
+    return paths;
 }

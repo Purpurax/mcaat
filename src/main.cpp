@@ -51,7 +51,7 @@ namespace fs = std::filesystem;
 void print_usage(const char* program_name) {
     cout << "-------------------------------------------------------" << endl;
     cout << "\n";
-    cout << "mCAAT - Metagenomic CRISPR Array Analysis Tool v. 0.1" << endl;
+    cout << "mCAAT - Metagenomic CRISPR Array Analysis Tool v. 0.4" << endl;
     cout << "\n";
     cout << "-------------------------------------------------------" << endl;
 }
@@ -298,6 +298,7 @@ std::map<uint64_t, std::vector<std::vector<uint64_t>>> createRepeatToSpacerNodes
     }
     return repeat_to_spacer_nodes;
 }
+
 #ifdef DEBUG
 int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
@@ -390,13 +391,23 @@ int main(int argc, char** argv) {
     IsolateProtospacers isolator(sdbg, repeat_to_spacer_nodes);
     pair<std::map<uint64_t,std::set<uint64_t>>,std::map<uint64_t,std::set<uint64_t>>> protospacer_nodes = isolator.getProtospacerNodes();
     auto grouped_paths_protospacers = isolator.DepthLimitedPathsFromInToOut(protospacer_nodes.first, protospacer_nodes.second, 50,1);
-    isolator.WritePathsToFile(grouped_paths_protospacers, "grouped_paths_protospacers.txt");
+       isolator.WritePathsToFile(grouped_paths_protospacers, "grouped_paths_protospacers.txt");
+
+    //auto grouped_paths_protospacers = isolator.ReadPathsFromFile("grouped_paths_protospacers.txt");
     
     //%% PROTOSPACER ISOLATION %%
     PhageCurator phage_curator(sdbg, grouped_paths_protospacers, cycles);
-    auto extended_paths = phage_curator.ExtendFromGroupedPaths(1000, 5000);
-    phage_curator.ReconstructPaths(extended_paths);
-    phage_curator.WriteSequencesToFasta("PhageCurator.txt");    
+
+    // Find and output quality paths using DLS with multiplicity filters, writing live to file
+    //phage_curator.FindQualityPathsDLSFromGroupedPaths(3000, 3010, "QualityPaths.fasta");  // min_length 3000, max_length arbitrary large
+    vector<int> beam_widths = {50};
+    // Find and output quality paths using beam search with multiplicity filters, writing live to file
+    for (int beam_width : beam_widths) {
+        string filename = "QualityPaths_BeamWidth" + to_string(beam_width) + ".fasta";
+        phage_curator.FindQualityPathsBeamSearchFromGroupedPaths(3000, 3010, filename, beam_width);  // min_length 3000, max_length arbitrary large
+    }
+
+    //io_ops::write_nodes_gfa("output.gfa", sdbg);
     //io_ops::write_nodes_gfa("output.gfa", sdbg);
     
 
@@ -406,7 +417,6 @@ int main(int argc, char** argv) {
     // %% DELETE THE GRAPH FOLDER %%          
     
 }
-
 
 #else
 int main(int argc, char** argv) {

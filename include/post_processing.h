@@ -120,6 +120,41 @@ public:
         double mean = sum / scores.size();
         return mean <= mean_similarity;
     }
+
+    std::vector<std::string> filter_substring_spacers(const std::vector<std::string>& spacers) {
+        std::vector<std::string> filtered;
+        std::unordered_set<std::string> kept;
+        // Sort by length descending to check shorter ones against longer ones
+        std::vector<std::string> sorted = spacers;
+        std::sort(sorted.begin(), sorted.end(), [](const std::string& a, const std::string& b) {
+            return a.size() > b.size();
+        });
+        for (const auto& spacer : sorted) {
+            bool is_substring = false;
+            for (const auto& kept_spacer : kept) {
+                if (rapidfuzz::fuzz::partial_ratio(spacer, kept_spacer) >= 90.0) {
+                    is_substring = true;
+                    break;
+                }
+            }
+            if (!is_substring) {
+                kept.insert(spacer);
+                filtered.push_back(spacer);
+            }
+        }
+        return filtered;
+    }
+
+    std::vector<std::string> filter_by_length(const std::vector<std::string>& spacers) {
+        std::vector<std::string> filtered;
+        for (const auto& spacer : spacers) {
+            if ((int)spacer.size() >= min_sl && (int)spacer.size() <= max_sl) {
+                filtered.push_back(spacer);
+            }
+        }
+        return filtered;
+    }
+
     std::string reconstruct_repeat(const std::string& original,
                                    const std::vector<std::string>& prefixes,
                                    const std::vector<std::string>& suffixes) {
@@ -182,6 +217,33 @@ public:
 
             std::unordered_set<std::string> unique(trimmed.begin(), trimmed.end());
             std::vector<std::string> unique_vec(unique.begin(), unique.end());
+
+            unique_vec = filter_substring_spacers(unique_vec);
+
+            unique_vec = filter_by_length(unique_vec);
+
+            if ((int)unique_vec.size() < amount) {
+                omitted_repeats++;
+                continue;
+            }
+
+            // Recompute kmers after filtering substrings
+            auto new_prefix_kmers = find_common_prefix_kmers(unique_vec, k);
+            auto new_suffix_kmers = find_common_suffix_kmers(unique_vec, k);
+            updated_repeat = reconstruct_repeat(repeat, new_prefix_kmers, new_suffix_kmers);
+
+            if ((int)updated_repeat.size() < min_rl || (int)updated_repeat.size() > max_rl) {
+                omitted_repeats++;
+                continue;
+            }
+
+            // Trim again with new kmers
+            unique_vec = trim_kmers_from_sequences(unique_vec, new_prefix_kmers, new_suffix_kmers);
+
+            if ((int)unique_vec.size() < amount) {
+                omitted_repeats++;
+                continue;
+            }
 
             if (!validate_spacer_diversity(unique_vec)) {
                 omitted_repeats++;
