@@ -68,7 +68,9 @@ include_directories(libs/megahit/src)
 add_subdirectory(libs/rapidfuzz-cpp)
 include_directories(libs/rapidfuzz-cpp)
 include_directories(${phmap_SOURCE_DIR})
+
 include_directories(libs/spoa)
+include_directories(libs/spoa/include)
 
 # Configure spoa options (disable exe and tests to build only the library)
 set(spoa_build_exe OFF CACHE BOOL "Disable spoa executable build" FORCE)
@@ -221,6 +223,7 @@ target_link_libraries(runTests
     ${ZLIB_LIBRARIES}
     pthread
     fmt::fmt
+    spoa::spoa
 )
 
 include(GoogleTest)

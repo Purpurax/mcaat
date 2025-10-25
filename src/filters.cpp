@@ -68,14 +68,6 @@ pair<vector<uint64_t>, vector<vector<uint64_t>>> Filters::_FindCRISPRArrayNodes(
         std::cerr << "Error: start_node not found in cycles." << std::endl;
         return {{}, {}};
     }
-    auto data = cycles[start_node];
-    if (data.size() < 2) {
-        return {{}, {}};
-    }
-    for (auto& vec : data) {
-        vec.pop_back();
-    }
-    cycles[start_node] = data;
 
     int threshold = static_cast<int>(data.size());
 
