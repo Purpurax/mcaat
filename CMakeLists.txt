@@ -54,6 +54,9 @@ endif()
 include_directories(include)
 include_directories(tests)
 
+add_subdirectory(libs/cft)
+include_directories(libs/cft/src)
+
 add_subdirectory(libs/googletest)
 include_directories(libs/googletest/googletest/include)
 
