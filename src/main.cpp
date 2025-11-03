@@ -10,15 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// #include "settings.h"
-// #include "filters.h"
-// #include <cstring>
-// #include "sdbg_build.h"
-// #include "post_processing.h"
-// #include <cctype>
-// #include <unordered_map>
-// #include "phage_curator.h"
-// #include "isolate_protospacers.h"
+
 #ifdef __linux__
 #include <sys/sysinfo.h>
 #elif defined(_WIN32)
@@ -40,6 +32,8 @@
 #include "spacer_ordering.h"
 #include "tmp_utils.h"
 #include "evaluation.h"
+#include "phage_curator.h"
+#include "isolate_protospacers.h"
 
 using namespace std;
 namespace fs = std::filesystem;

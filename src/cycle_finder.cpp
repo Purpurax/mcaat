@@ -384,7 +384,8 @@ void CycleFinder::InvalidateMultiplicityOneNodes() {
 size_t CycleFinder::ChunkStartNodes(map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked) {
     uint64_t loaded = 0;
     const int chunk_size = 20000;
-    this->InvalidateMultiplicityOneNodes();
+    int jump_stride = 20; // Jump over linear paths every 20 steps
+    //this->InvalidateMultiplicityOneNodes();
     #pragma omp parallel num_threads(this->threads_count)
     {
         #pragma omp for schedule(dynamic, chunk_size)
@@ -463,7 +464,7 @@ int CycleFinder::FindApproximateCRISPRArrays()
         auto thread_count = this->threads_count;
         if (static_cast<int>(nodes_iterator->second.size()) < thread_count)
             thread_count = nodes_iterator->second.size();
-        // #pragma omp parallel for num_threads(thread_count) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
+        #pragma omp parallel for num_threads(thread_count) reduction(+:cumulative) shared(nodes_iterator, sdbg, visited)
         for (uint64_t start_node_index = 0; start_node_index < nodes_iterator->second.size(); start_node_index++) {
             uint64_t start_node = nodes_iterator->second[start_node_index];
             if (this->visited[start_node]) continue;
