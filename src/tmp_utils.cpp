@@ -38,11 +38,11 @@ vector<vector<uint64_t>> cycles_map_to_cycles(
 }
 
 int get_cycle_count(
-    const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
+    const vector<vector<uint64_t>>& cycles
 ) {
     int count = 0;
-    for (const auto& pair : cycles_map) {
-        count += pair.second.size();
+    for (const auto& cycle : cycles) {
+        count += cycle.size();
     }
     return count;
 }

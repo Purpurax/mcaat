@@ -57,12 +57,12 @@ vector<vector<uint64_t>> cycles_map_to_cycles(
 );
 
 /**
- * @brief Get the cycle count from the special object
+ * @brief Get the cycle count from the 2d array
  * 
  * @return The cycle count (int)
  */
 int get_cycle_count(
-    const unordered_map<uint64_t, vector<vector<uint64_t>>>& cycles_map
+    const std::vector<std::vector<uint64_t>>& cycles
 );
 
 /**
