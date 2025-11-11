@@ -257,12 +257,13 @@ void get_minimum_cycles_for_full_coverage(vector<vector<uint64_t>>& cycles) {
     vector<size_t> kept_indices = solve_min_cover_problem(universe, sets);
     std::sort(kept_indices.begin(), kept_indices.end(), std::greater<size_t>());
     
-    for (size_t i = cycles.size() - 1; i >= 0; --i) {
-        if (std::find(kept_indices.begin(), kept_indices.end(), i) != kept_indices.end()) {
+    for (size_t i = 0; i < cycles.size(); ++i) {
+        size_t idx = cycles.size() - 1 - i;
+        if (std::find(kept_indices.begin(), kept_indices.end(), idx) != kept_indices.end()) {
             continue;
         }
 
-        cycles.erase(cycles.begin() + i);
+        cycles.erase(cycles.begin() + idx);
     }
 }
 
