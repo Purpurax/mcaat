@@ -222,6 +222,10 @@ vector<vector<uint64_t>> get_relevant_cycles(
 }
 
 void get_minimum_cycles_for_full_coverage(vector<vector<uint64_t>>& cycles) {
+    if (cycles.size() == 0) {
+        return;
+    }
+    
     unordered_set<uint32_t> universe;
     vector<vector<uint32_t>> sets;
 
@@ -246,10 +250,14 @@ void get_minimum_cycles_for_full_coverage(vector<vector<uint64_t>>& cycles) {
         sets.push_back(set);
     }
 
+    if (universe.size() == 0 || sets.size() == 0) {
+        return;
+    }
+
     vector<size_t> kept_indices = solve_min_cover_problem(universe, sets);
     std::sort(kept_indices.begin(), kept_indices.end(), std::greater<size_t>());
     
-    for (int i = cycles.size() - 1; i >= 0; --i) {
+    for (size_t i = cycles.size() - 1; i >= 0; --i) {
         if (std::find(kept_indices.begin(), kept_indices.end(), i) != kept_indices.end()) {
             continue;
         }
