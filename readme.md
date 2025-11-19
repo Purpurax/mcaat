@@ -130,6 +130,32 @@ The tool creates the following directory structure inside the specified output f
 
 ---
 
+### ⚙️ Settings file support
+
+Create a simple key=value text file (one setting per line) and pass it with `--settings /path/to/file`.
+
+The program reads values from this file unless you override them with CLI flags. If you change the file, run the program again — new values will be used.
+
+Example of ```settings.txt``` (must include `input_files`):
+```
+# MUST INCLUDE
+input_files=/data/sample_folder/1.fastq /data/sample_folder/2.fastq.fastq
+ram=128G
+threads=26
+output_folder=results/run_2025-11-19
+# OPTIONAL
+cycle_max_length=77
+cycle_min_length=27
+threshold_multiplicity=20
+low_abundance=true
+```
+
+Notes:
+- `input_files` accepts one or two paths; entries may be separated by spaces, commas, or semicolons.
+- Terminal values will override the ```settings.txt```. For example for simplicity you can use the ```settings.txt``` file and change only ```-i``` parameter.
+
+---
+
 #### Requirements
 
 - C++17 compiler

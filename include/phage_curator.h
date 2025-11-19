@@ -50,6 +50,8 @@ public:
     std::vector<std::vector<uint64_t>> BeamSearchPathsAvoiding(uint64_t start, int lower, int higher, const std::set<uint64_t>& forbidden, int beam_width, double min_mult, double max_mult, std::function<void(const std::vector<uint64_t>&)> path_callback = nullptr);
     std::map<std::string,vector<string>> FindQualityPathsBeamSearchFromGroupedPaths(int min_length, int max_length, const std::string& filename, int beam_width);
     std::string ComputeConsensusForCurrentGroup(vector<string> sequences);
+    std::vector<vector<uint64_t>> GetTopPathsFromBeamPaths(const std::vector<std::vector<uint64_t>>& beam_paths,int max,int min,size_t top_n);
+
 };
 
 #endif // PHAGE_CURATOR_H

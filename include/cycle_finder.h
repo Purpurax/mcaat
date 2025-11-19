@@ -9,6 +9,7 @@
 #include <stack>
 #include <omp.h>
 #include "path_writer.h"
+#include "settings.h"
 #include <unordered_set>
 //#include "progressbar.hpp"
 #include <list>
@@ -23,15 +24,15 @@ using namespace std;
 
 class CycleFinder {
     private:
-        uint8_t maximal_length;
-        uint8_t minimal_length;
+        // Use Settings to configure CycleFinder globally
+        Settings& settings;
         static constexpr size_t MAX_EDGE_COUNT = 4;
-        SDBG& sdbg;
-        
+        // Use SDBG pointer from settings everywhere instead of storing a separate reference
+        //SDBG& sdbg;
         uint16_t cluster_bounds;
         vector<bool> visited;
         vector<bool> look_up_table;
-        int threads_count;
+        // thread count obtained from settings
 
         //#### DEVELOPER FUNCTIONS ####
         void _WriteStartNodesToFile(const map<int, vector<uint64_t>, greater<int>>& start_nodes_chunked, const std::string& filename);
@@ -53,8 +54,8 @@ class CycleFinder {
         //#### HELPER FUNCTIONS FOR DLS ####
 
     public:
-        string genome_name;
-        CycleFinder(SDBG& sdbg, int length_bound, int minimal_length, string genome_name,int threads_count);
+        // genome/cycles folder available via settings
+        CycleFinder(Settings& settings);
         //write a getter for results
         unordered_map<uint64_t, vector<vector<uint64_t>>> results;
 
