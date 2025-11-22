@@ -93,8 +93,19 @@ Settings parse_arguments(int argc, char* argv[]) {
     // Get timestamp for fallback folder naming
     string timestamp = settings.get_timestamp();
 
-    bool output_folder_provided = false;
+    // Pre-scan for --settings so file values can be used as defaults and CLI overrides them
+    for (int j = 1; j < argc; ++j) {
+        if (string(argv[j]) == "--settings" && j + 1 < argc) {
+            string settings_file = argv[j + 1];
+            if (!settings.LoadFromFile(settings_file))
+                throw runtime_error("Error: could not load settings from " + settings_file);
+            break;
+        }
+    }
+
+     bool output_folder_provided = false;
  bool required_files_provided = false;
+     bool input_files_from_settings = false;
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
 
@@ -107,6 +118,11 @@ Settings parse_arguments(int argc, char* argv[]) {
                  << "  --threads <num>                 Number of threads. Default: CPU cores - 2\n"
                  << "  --output-folder <path>          Output directory. If not provided, a timestamped folder is created\n"
                  << "  --benchmark <file>              File containing expected crispr sequences line separated\n"
+                 << "  --cycle-max-length <int>       Maximum cycle length to search (default in settings)\n"
+                 << "  --cycle-min-length <int>       Minimum cycle length to search (default in settings)\n"
+                 << "  --threshold-multiplicity <int> Minimum multiplicity threshold for start nodes (default in settings)\n"
+                 << "  --low-abundance <true|false>   Enable low abundance mode for cycle filtering\n"
+                 << "  --settings <path>              Path to a key=value settings file (overridden by CLI args)\n"
                  << "  --help, -h                      Show this help message\n";
             exit(0);
         }
@@ -178,24 +194,70 @@ Settings parse_arguments(int argc, char* argv[]) {
                 throw runtime_error("Error: Missing value for --output-folder");
             }
         }
+        else if (arg == "--cycle-max-length") {
+            if (++i < argc) {
+                settings.cycle_finder_settings.cycle_max_length = stoi(argv[i]);
+            } else {
+                throw runtime_error("Error: Missing value for --cycle-max-length");
+            }
+        } else if (arg == "--cycle-min-length") {
+            if (++i < argc) {
+                settings.cycle_finder_settings.cycle_min_length = stoi(argv[i]);
+            } else {
+                throw runtime_error("Error: Missing value for --cycle-min-length");
+            }
+        } else if (arg == "--threshold-multiplicity") {
+            if (++i < argc) {
+                settings.cycle_finder_settings.threshold_multiplicity = stoull(argv[i]);
+            } else {
+                throw runtime_error("Error: Missing value for --threshold-multiplicity");
+            }
+        } else if (arg == "--low-abundance") {
+            if (++i < argc) {
+                string value = argv[i];
+                std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+                settings.cycle_finder_settings.low_abundance = (value == "1" || value == "true" || value == "yes");
+            } else {
+                throw runtime_error("Error: Missing value for --low-abundance");
+            }
+        }
     }
-    if (!required_files_provided && input_files_default.empty()) {
+    // If settings file provided input_files, allow it as equivalent to CLI --input-files
+    if (input_files_default.empty() && !settings.input_files.empty()) {
+        std::istringstream iss(settings.input_files);
+        string token;
+        while (iss >> token) {
+            input_files_default.push_back(token);
+        }
+        required_files_provided = true;
+        input_files_from_settings = true;
+    }
+
+    if (!required_files_provided && input_files_default.empty() && settings.input_files.empty()) {
         throw runtime_error("Error: No input files provided. Use --input-files <file1> [file2]");
     }
-    // Set default output folder if not provided
-    if (!output_folder_provided) {
+    // Set default output folder if not provided (only if not set by settings file)
+    if (!output_folder_provided && settings.output_folder.empty()) {
         settings.output_folder = "mcaat_run_" + timestamp;
     }
 
-    // Set subfolders and output file
-    settings.graph_folder = settings.output_folder + "/graph";
-    settings.cycles_folder = settings.output_folder + "/cycles";
-    settings.output_file = settings.output_folder + "/CRISPR_Arrays.txt";
+    // Set subfolders and output file (but allow them to be set in settings file)
+    if (settings.graph_folder.empty())
+        settings.graph_folder = settings.output_folder + "/graph";
+    if (settings.cycles_folder.empty())
+        settings.cycles_folder = settings.output_folder + "/cycles";
+    if (settings.output_file.empty())
+        settings.output_file = settings.output_folder + "/CRISPR_Arrays.txt";
 
     // Debug output
     cout << "Output folder: " << settings.output_folder << endl;
-    cout << "Graph folder: " << settings.graph_folder << endl;
-    cout << "Cycles folder: " << settings.cycles_folder << endl;
+        cout << "Graph folder: " << settings.graph_folder << endl;
+        cout << "Cycles folder: " << settings.cycles_folder << endl;
+        cout << "CycleFinder settings: max_length=" << settings.cycle_finder_settings.cycle_max_length
+            << " min_length=" << settings.cycle_finder_settings.cycle_min_length
+            << " threshold_mult=" << settings.cycle_finder_settings.threshold_multiplicity
+            << " low_abundance=" << (settings.cycle_finder_settings.low_abundance ? "true" : "false")
+            << " threads=" << settings.threads << endl;
 
     // Create directories
     try {
@@ -219,10 +281,12 @@ Settings parse_arguments(int argc, char* argv[]) {
             throw runtime_error("Error: Input file " + file + " does not exist.");
         }
         count++;
-        if (count == 1)
+        // Only overwrite settings.input_files if the CLI actually provided files.
+        // If input files were taken from the settings file, they are already in settings.input_files
+        if (required_files_provided && !input_files_from_settings) {
+            if (!settings.input_files.empty()) settings.input_files += " ";
             settings.input_files += file;
-        if (count == 2)
-            settings.input_files += " " + file + " ";
+        }
     }
 
     if (settings.threads == 0) {
@@ -237,17 +301,17 @@ Settings parse_arguments(int argc, char* argv[]) {
 }
 
 
-string fetchNodeLabel(SDBG& sdbg, uint64_t node) {
+string fetchNodeLabel(Settings& settings, uint64_t node) {
     std::string label;            
-    uint8_t seq[sdbg.k()];
-    sdbg.GetLabel(node, seq);
-    for (int i = sdbg.k() - 1; i >= 0; --i) label.append(1, "ACGT"[seq[i] - 1]);
+    uint8_t seq[settings.sdbg->k()];
+    settings.sdbg->GetLabel(node, seq);
+    for (int i = settings.sdbg->k() - 1; i >= 0; --i) label.append(1, "ACGT"[seq[i] - 1]);
     reverse(label.begin(), label.end());
     return label;
 }
 
-uint64_t findNodeFromKmer(const SDBG& sdbg, const std::string& kmer) {
-    int k = sdbg.k();
+uint64_t findNodeFromKmer(Settings& settings, const std::string& kmer) {
+    int k = settings.sdbg->k();
     if (static_cast<int>(kmer.size()) != k) {
         std::cerr << "Warning: kmer size " << kmer.size() << " does not match k=" << k << std::endl;
         return UINT64_MAX; // or handle error
@@ -256,17 +320,17 @@ uint64_t findNodeFromKmer(const SDBG& sdbg, const std::string& kmer) {
     for (int i = 0; i < k; ++i) {
         seq[i] = "ACGT"s.find(kmer[i]) + 1;
     }
-    int64_t result = sdbg.IndexBinarySearch(seq.data());
+    int64_t result = settings.sdbg->IndexBinarySearch(seq.data());
     return (result == -1) ? UINT64_MAX : static_cast<uint64_t>(result);
 }
 
-std::map<uint64_t, std::vector<std::vector<uint64_t>>> createRepeatToSpacerNodes(const SDBG& sdbg, const std::map<std::string, std::vector<std::string>>& systems_from_analyzer) {
+std::map<uint64_t, std::vector<std::vector<uint64_t>>> createRepeatToSpacerNodes(Settings& settings, const std::map<std::string, std::vector<std::string>>& systems_from_analyzer) {
     std::map<uint64_t, std::vector<std::vector<uint64_t>>> repeat_to_spacer_nodes;
-    int k = sdbg.k();
+    int k = settings.sdbg->k();
     for (const auto& [repeat, spacers] : systems_from_analyzer) {
         if (static_cast<int>(repeat.size()) < k) continue;
         std::string first_kmer = repeat.substr(0, k);
-        uint64_t key_node = findNodeFromKmer(sdbg, first_kmer);
+        uint64_t key_node = findNodeFromKmer(settings, first_kmer);
         if (key_node == UINT64_MAX) continue; // invalid
         std::vector<std::vector<uint64_t>> spacer_node_vectors;
         for (const auto& spacer : spacers) {
@@ -274,7 +338,7 @@ std::map<uint64_t, std::vector<std::vector<uint64_t>>> createRepeatToSpacerNodes
             int L = spacer.size();
             for (int i = 0; i <= L - k; ++i) {
                 std::string kmer = spacer.substr(i, k);
-                uint64_t node = findNodeFromKmer(sdbg, kmer);
+                uint64_t node = findNodeFromKmer(settings, kmer);
                 if (node != UINT64_MAX) {
                     nodes.push_back(node);
                 }
@@ -313,20 +377,22 @@ int main(int argc, char** argv) {
     // %% PARSE ARGUMENTS %%
 
     // %% BUILD GRAPH %%
-    //SDBGBuild sdbg_build(settings);
+    SDBGBuild sdbg_build(settings);
     // %% BUILD GRAPH %%
     
    
-    int length_bound = 77;
+    // cycle finder max/min length are read from settings.cycle_finder_settings
     SDBG sdbg;
-    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-27_09-53-11/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph"};
+    vector<string> folders = {"/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-27_09-53-11/graph/graph","/vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-26-39/graph/graph",
+    "/vol/d/development/git/mcaat_master/mcaat/build/mcaat_run_2025-10-24_12-27-47/graph/graph","/vol/d/data/real/graph"};
     string graph_folder_old = settings.graph_folder;///vol/d/development/git/mcaat_master/mcaat/_build/mcaat_run_2025-08-28_13-23-46
-    settings.graph_folder=folders[1];
+    settings.graph_folder=settings.graph_folder+"/graph";
     char * cstr = new char [settings.graph_folder.length()+1];
     std::strcpy (cstr, settings.graph_folder.c_str());
     cout << "Graph folder: " << cstr << endl;
     sdbg.LoadFromFile(cstr);
     cout << "Loaded the graph" << endl;
+    settings.sdbg = &sdbg;
 
     // %% LOAD GRAPH %%
     
@@ -334,9 +400,9 @@ int main(int argc, char** argv) {
     string ending_seq = "CAGAGATAGAAATTATTTTTATTATACGTTTTTTTGT";
     vector<int64_t> end_nodes;
     //using findNodeFromKmer find all the node ids in the ending_seq
-    for (size_t i = 0; i <= ending_seq.size() - sdbg.k(); ++i) {
+    for (size_t i = 0; i <= ending_seq.size() - settings.sdbg->k(); ++i) {
         string kmer = ending_seq.substr(i, sdbg.k());
-        uint64_t node = findNodeFromKmer(sdbg, kmer);
+        uint64_t node = findNodeFromKmer(settings, kmer);
         if (node != UINT64_MAX) {
             end_nodes.push_back(node);
         }
@@ -347,14 +413,30 @@ int main(int argc, char** argv) {
         cout << node << " ";
     }
     cout << endl;
+    // make some distribution of multiplicities of all nodes in the graph
+    std::map<int, int> multiplicity_distribution;
+    for (uint64_t node = 0; node < sdbg.size(); ++node) {
+        int mult = sdbg.EdgeMultiplicity(node);
+        multiplicity_distribution[mult]++;
+    }
+    cout << "Node Multiplicity Distribution:" << endl;
+    //write distribution to file
+    ofstream mult_file("node_multiplicities.txt");
+    for (const auto& [mult, count] : multiplicity_distribution) {
+        mult_file << "Multiplicity " << mult << ": " << count << " nodes" << endl;
+    }
 
-
-
+    mult_file.close();
+    // for (uint64_t node = 0; node < sdbg.size(); ++node) {
+    //     int mult = sdbg.EdgeMultiplicity(node);
+    //     mult_file << node << "\t" << mult << "\n";
+    // }
+    // mult_file.close();
     // %% FBCE ALGORITHM %%
     cout << "FBCE FROM DEBUG START:" << endl;
     auto start_time = chrono::high_resolution_clock::now();
-    CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
-    int number_of_spacers_total = 0;
+    CycleFinder cycle_finder(settings);
+    // number_of_spacers_total not used; remove to avoid compiler warning
     auto cycles = cycle_finder.results;
     cout << "Number of nodes in results: " << cycles.size() << endl;
     // %% FBCE ALGORITHM %%
@@ -374,7 +456,7 @@ int main(int argc, char** argv) {
     analyzer.run_analysis();
     cout << "Saved in: " << settings.output_file << endl;
     auto systems_from_analyzer = analyzer.getSystems();
-    auto repeat_to_spacer_nodes = createRepeatToSpacerNodes(sdbg, systems_from_analyzer);
+    auto repeat_to_spacer_nodes = createRepeatToSpacerNodes(settings, systems_from_analyzer);
     cout << "Created repeat_to_spacer_nodes map with " << repeat_to_spacer_nodes.size() << " entries." << endl;
     //%% POST PROCESSING %%
 
@@ -397,6 +479,7 @@ int main(int argc, char** argv) {
         string filename = "QualityPaths_BeamWidth" + to_string(beam_width) + ".fasta";
         phage_curator.FindQualityPathsBeamSearchFromGroupedPaths(3000, 3010, filename, beam_width);  // min_length 3000, max_length arbitrary large
     }
+    //print multiplicities of nodes into a file
 
     //io_ops::write_nodes_gfa("output.gfa", sdbg);
     //io_ops::write_nodes_gfa("output.gfa", sdbg);
@@ -435,18 +518,23 @@ int main(int argc, char** argv) {
     // %% BUILD GRAPH %%
     
     // %% LOAD GRAPH %%
-    const int length_bound = 77;
-    string graph_path = settings.graph_folder + "/graph";
-    cout << "Graph folder: " << graph_path << endl;
-
+    // cycle finder max/min length are read from settings.cycle_finder_settings
     SDBG sdbg;
-    sdbg.LoadFromFile(graph_path.c_str());
+    string graph_folder_old = settings.graph_folder;
+    settings.graph_folder+="/graph";
+    char * cstr = new char [settings.graph_folder.length()+1];
+    std::strcpy (cstr, settings.graph_folder.c_str());
+    cout << "Graph folder: " << cstr << endl;
+    sdbg.LoadFromFile(cstr);
     cout << "Loaded the graph" << endl;
+    settings.sdbg = &sdbg;
     // %% LOAD GRAPH %%
 
     // %% FBCE ALGORITHM %%
     cout << "FBCE START:" << endl;
-    CycleFinder cycle_finder(sdbg, length_bound, 27, settings.cycles_folder, settings.threads);
+    auto start_time = chrono::high_resolution_clock::now();
+    CycleFinder cycle_finder(settings);
+    // number_of_spacers_total unused
     auto cycles_map = cycle_finder.results;
     cout << "Number of nodes in results: " << cycles_map.size() << endl;
     // %% FBCE ALGORITHM %%

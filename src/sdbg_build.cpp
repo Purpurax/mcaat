@@ -57,11 +57,17 @@ std::string SDBGBuild::WriteLibFile()
         return "";
     }
     string switch_str = "se";
-    if (settings.input_files.find(" ") != std::string::npos) {
-        switch_str = "pe";
+    // split input_files on whitespace to detect paired-end input
+    vector<string> input_tokens;
+    {
+      istringstream iss(settings.input_files);
+      string tok;
+      while (iss >> tok) input_tokens.push_back(tok);
     }
+    if (input_tokens.size() > 1) switch_str = "pe";
     lib_file << "#lib file for the SDBG from " + settings.input_files + "\n";
-    lib_file << switch_str+" " + settings.input_files;
+    // Ensure lib file contains whitespace-separated file paths for the CLI tool
+    lib_file << switch_str + " " + settings.input_files;
     lib_file.close();
     std::cout << "Saved lib to file " << lib_file_path << std::endl;
 
